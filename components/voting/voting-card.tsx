@@ -31,7 +31,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
     const [cardState, setCardState] = useState<CardState>("idle");
     const [selectedDecision, setSelectedDecision] = useState<VoteDecision | null>(null);
 
-    const { castVote, getVoteReward } = useVoting();
+    const { castVote, getVoteReward, getUnclearVotes } = useVoting();
     const { isConnected, connect } = useWallet();
 
     const rewardAmount = getVoteReward(poll.id);
@@ -156,7 +156,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             {/* Vote Tally */}
             <div className="mb-6 p-4 rounded-lg bg-background/50 border border-border">
                 <h4 className="text-xs uppercase tracking-widest text-muted-foreground mb-4 font-bold">Community Tally</h4>
-                <VoteTally yesVotes={poll.yesPool} noVotes={poll.noPool} unclearVotes={Math.floor(poll.participants / 3)} animated />
+                <VoteTally yesVotes={poll.yesPool} noVotes={poll.noPool} unclearVotes={getUnclearVotes(poll.id)} animated />
             </div>
 
             {/* Interaction Area */}
