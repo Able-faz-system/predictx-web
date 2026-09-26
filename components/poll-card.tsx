@@ -1,29 +1,158 @@
 "use client"
 
-import { useState } from "react"
-import { Clock, Users, Info, Lock } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Clock, Users, Info, Lock, Zap } from "lucide-react"
 import { GamingButton } from "@/components/shared"
+import { Button } from "@/components/ui/button"
 import { StakeModal } from "@/components/staking"
-import type { Poll } from "@/lib/mock-data"
+import { WalletConnectModal } from "@/components/wallet-connect-modal"
+import { useWallet } from "@/hooks/use-wallet"
+import { useCountdown } from "@/hooks/use-countdown"
+import type { Poll, Match, PollCategory, LockTime } from "@/lib/mock-data"
 
-interface PollCardProps {
-  poll: Poll & { timeLeft?: string }
-  matchId: string
+export interface PollCardProps {
+  poll: Poll & { timeLeft?: string; recentActivity?: string; isHottest?: boolean }
+  match?: Match
+  matchId?: string
   matchName?: string
+  variant?: "compact" | "detailed"
+  isHottest?: boolean
+  animationDelay?: number
 }
 
-export function PollCard({ poll, matchId, matchName = "" }: PollCardProps) {
+const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
+  player_event: {
+    label: "Player",
+    className: "bg-primary/20 text-primary border border-primary/40",
+  },
+  team_event: {
+    label: "Team",
+    className: "bg-success/20 text-success border border-success/40",
+  },
+  score_prediction: {
+    label: "Score",
+    className: "bg-gold/20 text-gold border border-gold/40",
+  },
+  other: {
+    label: "Other",
+    className: "bg-foreground/10 text-foreground border border-border",
+  },
+}
+
+function getLockTargetISO(kickoff: string, lockTime: LockTime): string {
+  const kickoffTime = new Date(kickoff).getTime()
+  switch (lockTime) {
+    case "kickoff":
+      return kickoff
+    case "halftime":
+      return new Date(kickoffTime + 52 * 60 * 1000).toISOString()
+    case "60min":
+      return new Date(kickoffTime + 65 * 60 * 1000).toISOString()
+    default:
+      return kickoff
+  }
+}
+
+function TeamBadge({ name }: { name: string }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase()
+  return (
+    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-background border border-border text-[9px] font-bold font-mono text-muted-foreground shrink-0">
+      {initials}
+    </span>
+  )
+}
+
+function CompactCountdown({
+  kickoff,
+  lockTime,
+}: {
+  kickoff: string
+  lockTime: LockTime
+}) {
+  const targetISO = getLockTargetISO(kickoff, lockTime)
+  const { days, hours, minutes, seconds, isExpired, status } = useCountdown(targetISO)
+
+  const colorClass = {
+    safe: "text-primary bg-primary/10 border-primary/30",
+    warning: "text-gold bg-gold/10 border-gold/30",
+    urgent: "text-accent bg-accent/10 border-accent/30 animate-pulse",
+    critical: "text-accent bg-accent/20 border-accent/50 animate-pulse",
+    expired: "text-muted-foreground bg-surface border-border",
+  }[status]
+
+  if (isExpired) {
+    return (
+      <span className={`px-2 py-1 rounded border text-xs font-mono font-bold ${colorClass}`}>
+        LOCKED
+      </span>
+    )
+  }
+
+  const display =
+    days > 0
+      ? `${days}d ${hours}h`
+      : hours > 0
+        ? `${hours}h ${minutes}m`
+        : `${minutes}m ${seconds}s`
+
+  return (
+    <span className={`px-2 py-1 rounded border text-xs font-mono font-bold whitespace-nowrap ${colorClass}`}>
+      {display}
+    </span>
+  )
+}
+
+export function PollCard({
+  poll,
+  match,
+  matchId = "",
+  matchName = "",
+  variant,
+  isHottest = false,
+  animationDelay = 0,
+}: PollCardProps) {
+  const router = useRouter()
+  const { isConnected } = useWallet()
   const [showStakeModal, setShowStakeModal] = useState(false)
+  const [showWalletModal, setShowWalletModal] = useState(false)
+  const [pendingStake, setPendingStake] = useState(false)
   const [initialSide, setInitialSide] = useState<"yes" | "no">("yes")
+
+  const effectiveMatchId = matchId || poll.matchId || match?.id || ""
+  const effectiveMatchName = matchName || (match ? `${match.homeTeam} vs ${match.awayTeam}` : "")
+  const effectiveIsHottest = isHottest || !!poll.isHottest
 
   const total = poll.yesPool + poll.noPool
   const yesPercentage = total > 0 ? (poll.yesPool / total) * 100 : 50
   const noPercentage = 100 - yesPercentage
+  const yesPercent = Math.round(yesPercentage)
+  const noPercent = 100 - yesPercent
 
   const isActive = !poll.status || poll.status === "active"
   const isResolved = poll.status === "resolved"
   const isLocked = poll.status === "locked"
   const isVoting = poll.status === "voting"
+  const isHighValue = total > 10_000
+
+  const category = CATEGORY_STYLES[poll.category] ?? {
+    label: poll.category ? String(poll.category).replace("_", " ") : "Poll",
+    className: "bg-primary/20 text-primary border border-primary/40",
+  }
+
+  // Handle wallet connect callback for pending stakes
+  useEffect(() => {
+    if (isConnected && pendingStake) {
+      setPendingStake(false)
+      setShowWalletModal(false)
+      setShowStakeModal(true)
+    }
+  }, [isConnected, pendingStake])
 
   const openStake = (side: "yes" | "no") => {
     if (!isActive) return
@@ -31,6 +160,159 @@ export function PollCard({ poll, matchId, matchName = "" }: PollCardProps) {
     setShowStakeModal(true)
   }
 
+  const handleCompactStakeClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isConnected) {
+      setShowStakeModal(true)
+    } else {
+      setPendingStake(true)
+      setShowWalletModal(true)
+    }
+  }
+
+  const handleCardClick = () => {
+    if (effectiveMatchId) {
+      router.push(`/match/${effectiveMatchId}`)
+    }
+  }
+
+  const isCompact = variant === "compact" || (variant === undefined && !!match)
+
+  if (isCompact) {
+    return (
+      <>
+        <div
+          onClick={handleCardClick}
+          className={[
+            "relative bg-surface border-2 clip-corner-lg cursor-pointer",
+            "transition-all duration-300 group overflow-hidden",
+            effectiveIsHottest
+              ? "border-gold hover:shadow-[0_0_40px_rgba(255,215,0,0.35)]"
+              : "border-border hover:border-primary hover:shadow-[0_0_30px_rgba(0,217,255,0.2)]",
+            isHighValue
+              ? "shadow-[inset_0_0_30px_rgba(0,217,255,0.05),0_0_0_1px_rgba(0,217,255,0.1)]"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={{ animationDelay: `${animationDelay}ms` }}
+        >
+          {effectiveIsHottest && (
+            <div className="absolute top-0 right-0 z-10">
+              <div className="px-3 py-1 bg-gradient-to-r from-gold to-amber-500 text-background text-xs font-bold uppercase tracking-wider clip-corner">
+                HOTTEST 🔥
+              </div>
+            </div>
+          )}
+
+          {effectiveIsHottest && (
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0 bg-gradient-to-br from-gold/10 via-transparent to-amber-500/10 animate-pulse-glow opacity-60" />
+            </div>
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/8 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 pointer-events-none" />
+
+          <div className="relative p-5 space-y-4">
+            {match && (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TeamBadge name={match.homeTeam} />
+                  <span className="text-xs font-bold text-foreground truncate">
+                    {match.homeTeam} vs {match.awayTeam}
+                  </span>
+                  <TeamBadge name={match.awayTeam} />
+                </div>
+                <CompactCountdown kickoff={match.kickoff} lockTime={poll.lockTime} />
+              </div>
+            )}
+
+            <span
+              className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${category.className}`}
+            >
+              {category.label}
+            </span>
+
+            <p className="font-display text-lg font-bold text-foreground leading-tight">
+              {poll.question}
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-success font-bold">
+                  YES {yesPercent}% · ${poll.yesPool.toLocaleString()}
+                </span>
+                <span className="text-accent font-bold">
+                  ${poll.noPool.toLocaleString()} · {noPercent}% NO
+                </span>
+              </div>
+              <div className="relative h-3 bg-background-secondary rounded-full overflow-hidden">
+                <div
+                  className="absolute left-0 top-0 h-full bg-gradient-to-r from-success to-success/70 glow-green transition-all duration-500"
+                  style={{ width: `${yesPercent}%` }}
+                />
+                <div
+                  className="absolute right-0 top-0 h-full bg-gradient-to-l from-accent to-accent/70 glow-magenta transition-all duration-500"
+                  style={{ width: `${noPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="h-3 w-3" />
+                <span>{poll.participants} stakers</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  Total Pool
+                </p>
+                <p className="font-mono font-bold text-gold text-glow-gold text-sm">
+                  ${total.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {poll.recentActivity && (
+              <p className="text-xs italic text-muted-foreground/80 leading-tight">
+                {poll.recentActivity}
+              </p>
+            )}
+
+            <Button
+              onClick={handleCompactStakeClick}
+              className={[
+                "w-full h-10 font-bold uppercase tracking-wider text-sm",
+                "bg-primary hover:bg-primary/90 text-background",
+                "glow-cyan hover:shadow-[0_0_25px_rgba(0,217,255,0.5)]",
+                "transition-all hover:scale-[1.02]",
+              ].join(" ")}
+            >
+              {isHighValue && <Zap className="mr-1.5 h-4 w-4" />}
+              Stake Now
+            </Button>
+          </div>
+        </div>
+
+        <StakeModal
+          poll={poll}
+          matchId={effectiveMatchId}
+          matchName={effectiveMatchName}
+          open={showStakeModal}
+          onClose={() => setShowStakeModal(false)}
+        />
+        <WalletConnectModal
+          open={showWalletModal}
+          onClose={() => {
+            setShowWalletModal(false)
+            if (!isConnected) setPendingStake(false)
+          }}
+        />
+      </>
+    )
+  }
+
+  // Detailed variant (used on match page and polls list)
   return (
     <>
       <div
@@ -51,7 +333,7 @@ export function PollCard({ poll, matchId, matchName = "" }: PollCardProps) {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="inline-block px-2 py-1 bg-primary/20 text-primary text-xs font-bold uppercase tracking-wider rounded mb-2">
-                    {poll.category.replace("_", " ")}
+                    {category.label}
                   </div>
                   <h3 className="font-display text-2xl font-bold text-foreground text-balance">{poll.question}</h3>
                 </div>
@@ -109,6 +391,13 @@ export function PollCard({ poll, matchId, matchName = "" }: PollCardProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Social Proof */}
+              {poll.recentActivity && (
+                <p className="text-xs italic text-muted-foreground/80 leading-tight">
+                  {poll.recentActivity}
+                </p>
+              )}
             </div>
 
             {/* Right: Stake Buttons */}
@@ -166,8 +455,8 @@ export function PollCard({ poll, matchId, matchName = "" }: PollCardProps) {
 
       <StakeModal
         poll={poll}
-        matchId={matchId}
-        matchName={matchName}
+        matchId={effectiveMatchId}
+        matchName={effectiveMatchName}
         initialSide={initialSide}
         open={showStakeModal}
         onClose={() => setShowStakeModal(false)}
