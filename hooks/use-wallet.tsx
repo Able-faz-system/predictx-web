@@ -149,9 +149,13 @@ export const useWallet = create<WalletState>()(
           throw new Error("Wallet not connected");
         }
 
-        const amountXLM = amountUSD / XLM_USD_RATE;
+        // Round to stroop precision (7 decimal places = 10^-7 XLM) to avoid
+        // floating-point drift from repeated USD → XLM conversions.
+        const STROOPS_PER_XLM = 10_000_000;
+        const amountXLM = Math.round((amountUSD / XLM_USD_RATE) * STROOPS_PER_XLM) / STROOPS_PER_XLM;
+        const feeXLM = STELLAR_BASE_FEE / STROOPS_PER_XLM; // 0.0000100 XLM
 
-        if (amountXLM > state.balance) {
+        if (amountXLM + feeXLM > state.balance) {
           throw new Error("Insufficient balance");
         }
 
@@ -181,7 +185,7 @@ export const useWallet = create<WalletState>()(
         const receipt: TransactionReceipt = {
           hash: hashBytes,
           ledger: 50_000_000 + Math.floor(Math.random() * 1_000_000),
-          fee: `${STELLAR_BASE_FEE} stroops (${(STELLAR_BASE_FEE / 10_000_000).toFixed(7)} XLM)`,
+          fee: `${STELLAR_BASE_FEE} stroops (${feeXLM.toFixed(7)} XLM)`,
           from: state.address,
           to: MOCK_CONTRACT_ID,
           amount: amountUSD,
@@ -189,8 +193,9 @@ export const useWallet = create<WalletState>()(
           timestamp: new Date().toISOString(),
         };
 
-        // deduct from wallet
-        set((s) => ({ balance: s.balance - amountXLM }));
+        // Deduct both the transfer amount and the network fee so the ledger
+        // balance exactly matches the receipt — fixes the drift described in #130.
+        set((s) => ({ balance: s.balance - amountXLM - feeXLM }));
 
         return receipt;
       },

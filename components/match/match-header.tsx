@@ -5,6 +5,7 @@ import { Trophy, MapPin, Calendar, Clock, Shield } from "lucide-react"
 import { GlowCard, TeamBadge, CountdownTimer } from "@/components/shared"
 import type { Match } from "@/lib/mock-data"
 import type { Team } from "@/components/shared/team-badge"
+import { getTeamColor } from "@/lib/team-colors"
 
 interface MatchHeaderProps {
   match: Match
@@ -25,25 +26,6 @@ function toTeam(name: string, color: string): Team {
       .slice(0, 3)
       .toUpperCase(),
   }
-}
-
-const TEAM_COLORS: Record<string, string> = {
-  Chelsea: "#034694",
-  "Manchester United": "#DA291C",
-  Arsenal: "#EF0107",
-  Liverpool: "#C8102E",
-  "Manchester City": "#6CABDD",
-  Tottenham: "#132257",
-  Newcastle: "#241F20",
-  "Aston Villa": "#95BFE5",
-  Brighton: "#0057B8",
-  "West Ham": "#7A263A",
-  Everton: "#003399",
-  Wolves: "#FDB913",
-}
-
-function getTeamColor(name: string) {
-  return TEAM_COLORS[name] ?? "#00d9ff"
 }
 
 /* ── Status badge ───────────────────────────────────────────────────────── */

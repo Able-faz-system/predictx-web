@@ -8,6 +8,7 @@ import { GlowCard } from "@/components/shared/glow-card";
 import { TeamBadge } from "@/components/shared/team-badge";
 import { CountdownTimer } from "@/components/shared/countdown-timer";
 import type { Match } from "@/lib/mock-data";
+import { getTeamColor } from "@/lib/team-colors";
 
 interface MatchCardProps {
     match: Match;
@@ -28,12 +29,12 @@ export function MatchCard({
     const homeTeam = {
         id: `home-${match.id}`,
         name: match.homeTeam,
-        primaryColor: "#00d9ff", // Default cyan
+        primaryColor: getTeamColor(match.homeTeam),
     };
     const awayTeam = {
         id: `away-${match.id}`,
         name: match.awayTeam,
-        primaryColor: "#ff006e", // Default magenta
+        primaryColor: getTeamColor(match.awayTeam),
     };
 
     const isLive = match.status === "live";

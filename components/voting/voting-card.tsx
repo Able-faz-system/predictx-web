@@ -18,6 +18,7 @@ import { type Poll, type Match } from "@/lib/mock-data";
 import { useVoting, type VoteDecision } from "@/hooks/use-voting";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
+import { getTeamColor } from "@/lib/team-colors";
 
 interface VotingCardProps {
     poll: Poll;
@@ -38,12 +39,12 @@ export function VotingCard({ poll, match }: VotingCardProps) {
     const homeTeam = {
         id: `home-${match.id}`,
         name: match.homeTeam,
-        primaryColor: "#00d9ff",
+        primaryColor: getTeamColor(match.homeTeam),
     };
     const awayTeam = {
         id: `away-${match.id}`,
         name: match.awayTeam,
-        primaryColor: "#ff006e",
+        primaryColor: getTeamColor(match.awayTeam),
     };
 
     const handleSelectVote = (decision: VoteDecision) => {
