@@ -79,6 +79,8 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             );
         } catch (error) {
             // Revert on error
+            const msg = error instanceof Error ? error.message : "Vote failed. Please try again.";
+            toast.error("Vote Failed", { description: msg });
             setCardState("idle");
             setSelectedDecision(null);
         }

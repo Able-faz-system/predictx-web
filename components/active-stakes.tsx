@@ -1,7 +1,8 @@
 "use client"
 
-import { Clock } from "lucide-react"
+import { Clock, TrendingUp } from "lucide-react"
 import { Progress } from "./ui/progress"
+import { EmptyState } from "./shared/empty-state"
 
 const activeStakes = [
   {
@@ -42,11 +43,11 @@ const activeStakes = [
 export function ActiveStakes() {
   if (activeStakes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="text-6xl mb-4 opacity-20">📊</div>
-        <h3 className="font-display text-xl font-black uppercase text-muted mb-2">No Active Stakes Yet</h3>
-        <p className="text-muted-foreground">Jump Into The Action!</p>
-      </div>
+      <EmptyState
+        icon={<TrendingUp className="w-10 h-10" />}
+        title="No Active Stakes Yet"
+        description="Jump into the action by staking on a match event."
+      />
     )
   }
 
