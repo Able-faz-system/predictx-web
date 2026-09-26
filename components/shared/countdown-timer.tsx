@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ interface CountdownTimerProps {
   className?: string;
 }
 
-type UrgencyLevel = "safe" | "warning" | "urgent" | "critical";
+type UrgencyLevel = "safe" | "warning" | "urgent" | "critical" | "expired";
 
 interface TimeLeft {
   days: number;
@@ -24,10 +24,11 @@ interface TimeLeft {
 }
 
 const urgencyColors: Record<UrgencyLevel, string> = {
-  safe: "#00d9ff",    // cyan
+  safe: "#00d9ff", // cyan
   warning: "#ffd700", // gold
-  urgent: "#ff006e",  // magenta
+  urgent: "#ff006e", // magenta
   critical: "#ff006e", // magenta with pulse
+  expired: "#6b7280", // neutral gray
 };
 
 function getUrgencyLevel(totalMinutes: number): UrgencyLevel {
@@ -126,8 +127,11 @@ export function CountdownTimer({
   const [isTicking, setIsTicking] = useState(false);
   const [hasExpired, setHasExpired] = useState(false);
 
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const updateTimer = useCallback(() => {
     const target = new Date(targetTime);
+    const difference = target.getTime() - Date.now();
     const remaining = calculateTimeLeft(target);
     const totalMinutes =
       remaining.days * 24 * 60 +
@@ -136,35 +140,41 @@ export function CountdownTimer({
       remaining.seconds / 60;
 
     setTimeLeft(remaining);
+
+    if (difference <= 0) {
+      setUrgency("expired");
+      if (!hasExpired) {
+        setHasExpired(true);
+        onExpire?.();
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
     setUrgency(getUrgencyLevel(totalMinutes));
     setIsTicking(true);
     setTimeout(() => setIsTicking(false), 200);
-
-    if (
-      remaining.days === 0 &&
-      remaining.hours === 0 &&
-      remaining.minutes === 0 &&
-      remaining.seconds === 0 &&
-      !hasExpired
-    ) {
-      setHasExpired(true);
-      onExpire?.();
-    }
   }, [targetTime, onExpire, hasExpired]);
 
   useEffect(() => {
     updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
+    intervalRef.current = setInterval(updateTimer, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [updateTimer]);
 
   const color = urgencyColors[urgency];
   const isCritical = urgency === "critical";
+  const isExpired = urgency === "expired";
 
   if (compact) {
     return (
       <div className={cn("flex items-center gap-2", className)}>
-        {isCritical && (
+        {isCritical && !isExpired && (
           <motion.div
             animate={{ opacity: [1, 0.3, 1] }}
             transition={{ duration: 0.5, repeat: Infinity }}
@@ -179,7 +189,8 @@ export function CountdownTimer({
             textShadow: `0 0 10px ${color}80`,
           }}
         >
-          {timeLeft.hours > 0 && `${timeLeft.hours.toString().padStart(2, "0")}:`}
+          {timeLeft.hours > 0 &&
+            `${timeLeft.hours.toString().padStart(2, "0")}:`}
           {timeLeft.minutes.toString().padStart(2, "0")}:
           {timeLeft.seconds.toString().padStart(2, "0")}
         </div>
@@ -196,72 +207,88 @@ export function CountdownTimer({
       )}
 
       <div className="flex items-center gap-2 sm:gap-4">
-        {timeLeft.days > 0 && (
+        {!isExpired && (
           <>
+            {timeLeft.days > 0 && (
+              <>
+                <TimeUnit
+                  value={timeLeft.days}
+                  label="Days"
+                  color={color}
+                  size={size}
+                  isTicking={isTicking}
+                />
+                <span
+                  className={cn(
+                    "font-mono",
+                    size === "sm"
+                      ? "text-xl"
+                      : size === "md"
+                      ? "text-3xl"
+                      : "text-5xl"
+                  )}
+                  style={{ color: `${color}50` }}
+                >
+                  :
+                </span>
+              </>
+            )}
+
             <TimeUnit
-              value={timeLeft.days}
-              label="Days"
+              value={timeLeft.hours}
+              label="Hours"
               color={color}
               size={size}
               isTicking={isTicking}
             />
+
             <span
               className={cn(
                 "font-mono",
-                size === "sm" ? "text-xl" : size === "md" ? "text-3xl" : "text-5xl"
+                size === "sm"
+                  ? "text-xl"
+                  : size === "md"
+                  ? "text-3xl"
+                  : "text-5xl"
               )}
               style={{ color: `${color}50` }}
             >
               :
             </span>
+
+            <TimeUnit
+              value={timeLeft.minutes}
+              label="Mins"
+              color={color}
+              size={size}
+              isTicking={isTicking}
+            />
+
+            <span
+              className={cn(
+                "font-mono",
+                size === "sm"
+                  ? "text-xl"
+                  : size === "md"
+                  ? "text-3xl"
+                  : "text-5xl"
+              )}
+              style={{ color: `${color}50` }}
+            >
+              :
+            </span>
+
+            <TimeUnit
+              value={timeLeft.seconds}
+              label="Secs"
+              color={color}
+              size={size}
+              isTicking={isTicking}
+            />
           </>
         )}
 
-        <TimeUnit
-          value={timeLeft.hours}
-          label="Hours"
-          color={color}
-          size={size}
-          isTicking={isTicking}
-        />
-
-        <span
-          className={cn(
-            "font-mono",
-            size === "sm" ? "text-xl" : size === "md" ? "text-3xl" : "text-5xl"
-          )}
-          style={{ color: `${color}50` }}
-        >
-          :
-        </span>
-
-        <TimeUnit
-          value={timeLeft.minutes}
-          label="Mins"
-          color={color}
-          size={size}
-          isTicking={isTicking}
-        />
-
-        <span
-          className={cn(
-            "font-mono",
-            size === "sm" ? "text-xl" : size === "md" ? "text-3xl" : "text-5xl"
-          )}
-          style={{ color: `${color}50` }}
-        >
-          :
-        </span>
-
-        <TimeUnit
-          value={timeLeft.seconds}
-          label="Secs"
-          color={color}
-          size={size}
-          isTicking={isTicking}
-        />
-
-        {isCritical && (
+        {isCritical && !isExpired && (
           <motion.div
             className="ml-2"
             animate={{ opacity: [1, 0.3, 1], scale: [1, 1.1, 1] }}
@@ -269,6 +296,12 @@ export function CountdownTimer({
           >
             <AlertTriangle className="w-6 h-6 text-[#ff006e]" />
           </motion.div>
+        )}
+        {isExpired && (
+          <span className="text-[var(--muted-foreground)] font-mono font-bold uppercase tracking-wider ">
+            {" "}
+            Expired{" "}
+          </span>
         )}
       </div>
     </div>
