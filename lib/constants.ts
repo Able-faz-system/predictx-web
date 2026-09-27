@@ -69,41 +69,7 @@ export const DISPUTE_WINDOW_HOURS = 24;
  */
 export const VOTING_WINDOW_HOURS = 2;
 
-/* Staking*/
-/**
- * Preset USD stake amounts surfaced as quick-select buttons in the staking UI.
- * `as const` infers the literal tuple type `[50, 100, 500]` so mapped UI
- * components can iterate without widening to `number[]`.
- */
-export const QUICK_STAKE_AMOUNTS = [50, 100, 500] as const; // USD
-
-/**
- * Minimum USD value of any single stake.
- * Enforced on the frontend for UX; also enforced by the Soroban contract
- * via `MIN_STAKE_AMOUNT_STROOPS` to prevent dust attacks.
- * Soroban: cross-reference with `min_stake_amount` in the contract.
- */
-export const MIN_STAKE_AMOUNT = 1; // USD
-
-/**
- * Minimum stake amount in stroops — the authoritative on-chain minimum.
- * Derived from MIN_STAKE_AMOUNT using the mock XLM_USD_RATE; replace with
- * a dynamic calculation against a live oracle before mainnet deployment.
- * Soroban: must match `min_stake_amount` (i128) in the contract exactly.
- */
-export const MIN_STAKE_AMOUNT_STROOPS = BigInt(
-  Math.round((MIN_STAKE_AMOUNT / 0.12) * 10_000_000)
-); // stroops — recalculate when XLM_USD_RATE changes
-
-/**
- * Maximum stake expressed as a multiplier of the user's available balance.
- * A value of 1 means users may stake at most 100% of their balance in one tx.
- * Prevents accidental over-commitment; adjust if credit / margin features are added.
- */
-export const MAX_STAKE_MULTIPLIER = 1; // 1× balance (100%)
-
-
-
+/* Stellar Network*/
 /**
  * Stellar network used for all blockchain interactions.
  * `as const` narrows the type to the literal `"testnet"` so it can be passed
@@ -135,6 +101,41 @@ export const XLM_USD_RATE = 0.12; // 1 XLM ≈ $0.12 USD (mock — not productio
  */
 export const MOCK_CONTRACT_ID =
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+
+/* Staking*/
+/**
+ * Preset USD stake amounts surfaced as quick-select buttons in the staking UI.
+ * `as const` infers the literal tuple type `[50, 100, 500]` so mapped UI
+ * components can iterate without widening to `number[]`.
+ */
+export const QUICK_STAKE_AMOUNTS = [50, 100, 500] as const; // USD
+
+/**
+ * Minimum USD value of any single stake.
+ * Enforced on the frontend for UX; also enforced by the Soroban contract
+ * via `MIN_STAKE_AMOUNT_STROOPS` to prevent dust attacks.
+ * Soroban: cross-reference with `min_stake_amount` in the contract.
+ */
+export const MIN_STAKE_AMOUNT = 1; // USD
+
+/**
+ * Minimum stake amount in stroops — the authoritative on-chain minimum.
+ * Derived automatically from MIN_STAKE_AMOUNT and XLM_USD_RATE so it stays
+ * consistent when the rate constant is updated.
+ * Formula: ceil(MIN_STAKE_AMOUNT_USD / XLM_USD_RATE) × 10_000_000 stroops/XLM
+ * Soroban: must match `min_stake_amount` (i128) in the contract exactly.
+ * Cross-check against the contract source when deploying to mainnet (#63).
+ */
+export const MIN_STAKE_AMOUNT_STROOPS = BigInt(
+  Math.round((MIN_STAKE_AMOUNT / XLM_USD_RATE) * 10_000_000),
+); // stroops — auto-derived from XLM_USD_RATE above
+
+/**
+ * Maximum stake expressed as a multiplier of the user's available balance.
+ * A value of 1 means users may stake at most 100% of their balance in one tx.
+ * Prevents accidental over-commitment; adjust if credit / margin features are added.
+ */
+export const MAX_STAKE_MULTIPLIER = 1; // 1× balance (100%)
 
 /* UI / Validation*/
 /**

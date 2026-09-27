@@ -853,38 +853,86 @@ export const MOCK_STAKES: Stake[] = [
 ];
 
 // ── Voting opportunities ──────────────────────────────────────────────────────
+//
+// Rules kept consistent with use-voting.ts:
+//   • Every pollId MUST reference a poll whose status === "voting" so
+//     availablePolls() can surface it.
+//   • reward = (yesPool + noPool) * 0.005  — matches getVoteReward formula.
+//
+// Dev assertion (runs only in development builds):
+if (process.env.NODE_ENV === "development") {
+  // Resolved at module evaluation time — safe to run once on first import.
+  const _assertOpportunities = () => {
+    const votingPollIds = new Set(
+      POLLS.filter((p) => p.status === "voting").map((p) => p.id),
+    );
+
+    for (const opp of MOCK_VOTING_OPPORTUNITIES) {
+      const poll = POLLS.find((p) => p.id === opp.pollId);
+
+      if (!poll) {
+        console.warn(
+          `[MOCK] VotingOpportunity pollId "${opp.pollId}" has no matching poll.`,
+        );
+        continue;
+      }
+
+      if (!votingPollIds.has(opp.pollId)) {
+        console.warn(
+          `[MOCK] VotingOpportunity pollId "${opp.pollId}" has status "${poll.status}", not "voting".`,
+        );
+      }
+
+      const expectedReward = (poll.yesPool + poll.noPool) * 0.005;
+      if (Math.abs(opp.reward - expectedReward) > 0.01) {
+        console.warn(
+          `[MOCK] VotingOpportunity "${opp.pollId}" reward ${opp.reward} ≠ expected ${expectedReward}.`,
+        );
+      }
+    }
+  };
+
+  // Defer to avoid TDZ — POLLS and MOCK_VOTING_OPPORTUNITIES are defined
+  // in this same module but must both be initialised before we check them.
+  setTimeout(_assertOpportunities, 0);
+}
+
 export const MOCK_VOTING_OPPORTUNITIES: VotingOpportunity[] = [
   {
+    // m6-p1: (7200 + 4800) * 0.005 = 60
+    pollId: "m6-p1",
+    matchId: "m6",
+    matchName: "Everton vs Wolves",
+    question: "Will Everton win?",
+    reward: 60,
+    evidence: "Match in progress — vote on the final result",
+  },
+  {
+    // m6-p2: (5400 + 5600) * 0.005 = 55
+    pollId: "m6-p2",
+    matchId: "m6",
+    matchName: "Everton vs Wolves",
+    question: "Will total goals be over 2.5?",
+    reward: 55,
+    evidence: "Full-time — 2 goals scored in total",
+  },
+  {
+    // m6-p3: (1800 + 9200) * 0.005 = 55
     pollId: "m6-p3",
     matchId: "m6",
     matchName: "Everton vs Wolves",
     question: "Will there be a red card?",
-    reward: 12,
+    reward: 55,
     evidence: "Match ended without red cards per official report",
   },
   {
+    // m6-p5: (4300 + 6700) * 0.005 = 55
     pollId: "m6-p5",
     matchId: "m6",
     matchName: "Everton vs Wolves",
     question: "Will there be a VAR review?",
-    reward: 8,
+    reward: 55,
     evidence: "VAR used to review handball in 74th minute",
-  },
-  {
-    pollId: "m5-p3",
-    matchId: "m5",
-    matchName: "Brighton vs West Ham",
-    question: "Will there be a VAR review?",
-    reward: 25,
-    evidence: "Live — VAR review pending from 52nd min incident",
-  },
-  {
-    pollId: "m5-p4",
-    matchId: "m5",
-    matchName: "Brighton vs West Ham",
-    question: "Will both teams score?",
-    reward: 18,
-    evidence: "Brighton lead 1–0 at half; West Ham yet to score",
   },
 ];
 

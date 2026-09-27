@@ -26,6 +26,7 @@ import {
 } from "@/components/shared";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { WalletConnectModal } from "@/components/wallet-connect-modal";
 
 const variantColors = {
   default: "#00d9ff",
@@ -196,6 +197,7 @@ const faqs = [
 
 export function HowItWorksContent() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showWalletModal, setShowWalletModal] = useState(false);
 
   return (
     <div className="space-y-32">
@@ -442,16 +444,31 @@ export function HowItWorksContent() {
             Ready to Make Your <span className="text-primary text-glow-cyan">First Prediction?</span>
           </h2>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <GamingButton variant="primary" size="lg" className="min-w-[12rem]">
+            <GamingButton
+              variant="primary"
+              size="lg"
+              className="min-w-[12rem]"
+              href="/#matches"
+            >
               Explore Matches
             </GamingButton>
-            <GamingButton variant="ghost" size="lg" className="min-w-[12rem] gap-2">
+            <GamingButton
+              variant="ghost"
+              size="lg"
+              className="min-w-[12rem] gap-2"
+              onClick={() => setShowWalletModal(true)}
+            >
               <Wallet className="h-5 w-5" />
               Connect Wallet
             </GamingButton>
           </div>
         </div>
       </section>
+
+      <WalletConnectModal
+        open={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+      />
     </div>
   );
 }
