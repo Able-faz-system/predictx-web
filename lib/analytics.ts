@@ -23,6 +23,7 @@ import { track as vercelTrack } from "@vercel/analytics";
 
 export type AnalyticsEvent =
   | { name: "wallet_connect" }
+  | { name: "wallet_disconnect" }
   | { name: "poll_create"; pollCategory: string; matchId: string }
   | {
       name: "stake_placed";

@@ -12,7 +12,6 @@ import { formatAddress } from "@/lib/calculations";
 import { STORAGE_KEYS } from "@/lib/mock-data";
 import { toast } from "sonner";
 import { trackEvent } from "@/lib/analytics";
-
 import { stellar } from "@/lib/stellar";
 
 export interface ConnectPayload {
@@ -125,13 +124,15 @@ export const useWallet = create<WalletState>()(
         }
       },
 
-      disconnect: () =>
+      disconnect: () => {
+        trackEvent({ name: "wallet_disconnect" });
         set({
           isConnected: false,
           address: "",
           balance: 0,
           isConnecting: false,
-        }),
+        });
+      },
 
       switchNetwork: async (network: StellarNetwork) => {
         const { address, isConnected } = get();
