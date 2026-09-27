@@ -1,14 +1,62 @@
 "use client";
 
+import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { MatchCard } from "./match-card";
 import { useMockData } from "@/hooks/use-mock-data";
 import { GamingButton } from "@/components/shared/gaming-button";
+import type { Match } from "@/lib/mock-data";
+
+type FilterType = "all" | "live" | "today" | "week";
+
+const FILTER_LABELS: { key: FilterType; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "live", label: "Live" },
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+];
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+function filterMatches(matches: Match[], filter: FilterType): Match[] {
+    if (filter === "all") return matches;
+
+    const now = new Date();
+
+    if (filter === "live") {
+        return matches.filter((m) => m.status === "live");
+    }
+
+    if (filter === "today") {
+        return matches.filter((m) => isSameCalendarDay(new Date(m.kickoff), now));
+    }
+
+    if (filter === "week") {
+        const sevenDaysFromNow = new Date(now);
+        sevenDaysFromNow.setDate(now.getDate() + 7);
+        return matches.filter((m) => {
+            const kickoff = new Date(m.kickoff);
+            return kickoff >= now && kickoff <= sevenDaysFromNow;
+        });
+    }
+
+    return matches;
+}
 
 export function UpcomingMatches() {
     const shouldReduceMotion = useReducedMotion();
     const matches = useMockData((state) => state.matches);
     const getPolls = useMockData((state) => state.getPolls);
+
+    const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+
+    const visibleMatches = filterMatches(matches ?? [], activeFilter);
 
     if (!matches || matches.length === 0) {
         return (
@@ -72,7 +120,7 @@ export function UpcomingMatches() {
                         </p>
                     </motion.div>
 
-                    {/* Optional Filter Pills (Static mock for now, as requested) */}
+                    {/* Filter Pills */}
                     <motion.div
                         className="flex flex-wrap gap-2"
                         {...(shouldReduceMotion ? {} : {
@@ -82,37 +130,72 @@ export function UpcomingMatches() {
                             transition: { duration: 0.4, delay: 0.1 },
                         })}
                     >
-                        {["All", "Live", "Today", "This Week"].map((filter, i) => (
-                            <button
-                                key={filter}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors border ${i === 0
-                                    ? "bg-primary/20 border-primary text-primary"
-                                    : "bg-surface border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                        {FILTER_LABELS.map(({ key, label }) => {
+                            const isActive = activeFilter === key;
+                            return (
+                                <button
+                                    key={key}
+                                    aria-pressed={isActive}
+                                    onClick={() => setActiveFilter(key)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors border ${
+                                        isActive
+                                            ? "bg-primary/20 border-primary text-primary"
+                                            : "bg-surface border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
                                     }`}
-                            >
-                                {filter}
-                            </button>
-                        ))}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
                     </motion.div>
                 </div>
 
-                {/* Matches Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {matches.map((match, index) => {
-                        const matchPolls = getPolls(match.id);
-                        const totalPool = matchPolls.reduce((acc, p) => acc + p.yesPool + p.noPool, 0);
+                {/* Matches Grid or Empty State */}
+                {visibleMatches.length === 0 ? (
+                    <motion.div
+                        initial={shouldReduceMotion ? {} : { opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="flex flex-col items-center justify-center py-24 text-center"
+                    >
+                        <div className="w-16 h-16 mb-4 rounded-full border-2 border-primary/30 flex items-center justify-center opacity-60">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-display font-black uppercase text-foreground mb-2">
+                            No matches found
+                        </h3>
+                        <p className="text-muted-foreground text-sm">
+                            No matches match the <span className="text-primary font-semibold">{FILTER_LABELS.find(f => f.key === activeFilter)?.label}</span> filter.
+                        </p>
+                        <button
+                            onClick={() => setActiveFilter("all")}
+                            className="mt-4 text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+                        >
+                            Show all matches
+                        </button>
+                    </motion.div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {visibleMatches.map((match, index) => {
+                            const matchPolls = getPolls(match.id);
+                            const totalPool = matchPolls.reduce((acc, p) => acc + p.yesPool + p.noPool, 0);
 
-                        return (
-                            <MatchCard
-                                key={match.id}
-                                match={match}
-                                pollsCount={matchPolls.length}
-                                totalPool={totalPool}
-                                index={index}
-                            />
-                        );
-                    })}
-                </div>
+                            return (
+                                <MatchCard
+                                    key={match.id}
+                                    match={match}
+                                    pollsCount={matchPolls.length}
+                                    totalPool={totalPool}
+                                    index={index}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );

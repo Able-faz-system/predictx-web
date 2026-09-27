@@ -1,4 +1,5 @@
 import { DashboardTabs } from "@/components/dashboard-tabs"
+import { BadgesStrip } from "@/components/dashboard/badges-strip"
 
 export default function DashboardPage() {
   return (
@@ -16,6 +17,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
+        <BadgesStrip />
         <DashboardTabs />
       </div>
     </main>

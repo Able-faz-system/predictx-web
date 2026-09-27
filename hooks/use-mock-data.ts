@@ -17,6 +17,8 @@ interface MockDataState {
   matches: Match[];
   polls: Poll[];
   platformStats: PlatformStats;
+  /** Number of polls created by the current user (incremented on each addPoll call). */
+  userCreatedPollCount: number;
   getMatch: (id: string) => Match | undefined;
   getPolls: (matchId: string) => Poll[];
   getPoll: (pollId: string) => Poll | undefined;
@@ -46,6 +48,7 @@ export const useMockData = create<MockDataState>()(
       matches: MATCHES,
       polls: POLLS,
       platformStats: PLATFORM_STATS,
+      userCreatedPollCount: 0,
 
       getMatch: (id) => get().matches.find((m) => m.id === id),
 
@@ -105,7 +108,10 @@ export const useMockData = create<MockDataState>()(
 
       /** Prepend a newly-created poll so it appears immediately in all views. */
       addPoll: (poll) => {
-        set((s) => ({ polls: [poll, ...s.polls] }));
+        set((s) => ({
+          polls: [poll, ...s.polls],
+          userCreatedPollCount: s.userCreatedPollCount + 1,
+        }));
         trackEvent({
           name: "poll_create",
           pollCategory: poll.category,
