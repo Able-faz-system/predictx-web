@@ -142,6 +142,18 @@ export interface PlatformStats {
   totalPayouts: number;
 }
 
+export interface MatchEventTimelineItem {
+  time: string;
+  event: string;
+}
+
+export interface MatchEvidence {
+  matchId: string;
+  timeline: MatchEventTimelineItem[];
+  highlightsUrl?: string;
+  statsUrl?: string;
+}
+
 // ── Matches ───────────────────────────────────────────────────────────────────
 export const MATCHES: Match[] = [
   {
@@ -588,6 +600,110 @@ export const POLLS: Poll[] = [
     stakers: [],
   },
 ];
+
+// ── Match Evidence ────────────────────────────────────────────────────────────
+export const MATCH_EVIDENCE: Record<string, MatchEvidence> = {
+  m1: {
+    matchId: "m1",
+    timeline: [
+      { time: "0'", event: "Match starts — Chelsea vs Manchester United" },
+      { time: "12'", event: "Yellow Card — Shaw (MAN)" },
+      { time: "18'", event: "⚽ Goal! Cole Palmer (CHE) — Assists: Caicedo" },
+      { time: "31'", event: "Yellow Card — Dalot (MAN)" },
+      { time: "45+2'", event: "Half Time: Chelsea 1 - 0 Manchester United" },
+      { time: "52'", event: "⚽ Goal! Bruno Fernandes (MAN) — Free kick" },
+      { time: "68'", event: "Yellow Card — James (CHE)" },
+      { time: "71'", event: "Substitution — Mainoo replaces McTominay" },
+      { time: "85'", event: "⚽ Goal! Jackson (CHE)" },
+      { time: "90+4'", event: "Full Time: Chelsea 2 - 1 Manchester United" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Chelsea+vs+Manchester+United",
+    statsUrl: "https://www.premierleague.com/matches/Chelsea",
+  },
+  m2: {
+    matchId: "m2",
+    timeline: [
+      { time: "0'", event: "Match starts — Arsenal vs Liverpool" },
+      { time: "8'", event: "⚽ Goal! Saka (ARS) — Early breakthrough" },
+      { time: "24'", event: "Yellow Card — Van Dijk (LIV)" },
+      { time: "45'", event: "Half Time: Arsenal 1 - 0 Liverpool" },
+      { time: "56'", event: "⚽ Goal! Salah (LIV)" },
+      { time: "72'", event: "Yellow Card — Nketiah (ARS)" },
+      { time: "78'", event: "VAR Check: Potential handball — No penalty" },
+      { time: "81'", event: "⚽ Goal! Martinelli (ARS)" },
+      { time: "90+2'", event: "Yellow Card — Gravenberch (LIV)" },
+      { time: "90+5'", event: "Full Time: Arsenal 2 - 1 Liverpool" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Arsenal+vs+Liverpool",
+    statsUrl: "https://www.premierleague.com/matches/Arsenal",
+  },
+  m3: {
+    matchId: "m3",
+    timeline: [
+      { time: "0'", event: "Match starts — Manchester City vs Tottenham" },
+      { time: "5'", event: "⚽ Goal! Haaland (MAN) — Tap in" },
+      { time: "19'", event: "⚽ Goal! Foden (MAN)" },
+      { time: "38'", event: "Yellow Card — Romero (TOT)" },
+      { time: "45'", event: "Half Time: Manchester City 2 - 0 Tottenham" },
+      { time: "51'", event: "⚽ Goal! Richarlison (TOT)" },
+      { time: "62'", event: "⚽ Goal! Alvarez (MAN)" },
+      { time: "74'", event: "VAR Review: Potential foul — Play on" },
+      { time: "88'", event: "Yellow Card — Akanji (MAN)" },
+      { time: "90+3'", event: "Full Time: Manchester City 3 - 1 Tottenham" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Manchester+City+vs+Tottenham",
+    statsUrl: "https://www.premierleague.com/matches/Manchester+City",
+  },
+  m4: {
+    matchId: "m4",
+    timeline: [
+      { time: "0'", event: "Match starts — Newcastle vs Aston Villa" },
+      { time: "11'", event: "⚽ Goal! Isak (NEW)" },
+      { time: "28'", event: "Yellow Card — Cash (AVL)" },
+      { time: "35'", event: "⚽ Goal! Watkins (AVL)" },
+      { time: "45'", event: "Half Time: Newcastle 1 - 1 Aston Villa" },
+      { time: "57'", event: "⚽ Goal! Joelinton (NEW)" },
+      { time: "69'", event: "Yellow Card — Konsa (AVL)" },
+      { time: "76'", event: "VAR Check: Goal review — Allowed" },
+      { time: "82'", event: "Substitution — Mings replaces Konsa" },
+      { time: "90+2'", event: "Full Time: Newcastle 2 - 1 Aston Villa" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Newcastle+vs+Aston+Villa",
+    statsUrl: "https://www.premierleague.com/matches/Newcastle",
+  },
+  m5: {
+    matchId: "m5",
+    timeline: [
+      { time: "0'", event: "Match starts — Brighton vs West Ham (LIVE)" },
+      { time: "3'", event: "⚽ Goal! Mitoma (BRI)" },
+      { time: "14'", event: "Yellow Card — Fornals (WHU)" },
+      { time: "28'", event: "⚽ Goal! Kudus (WHU)" },
+      { time: "35'", event: "Yellow Card — Lewis Dunk (BRI)" },
+      { time: "45'", event: "Half Time: Brighton 1 - 1 West Ham" },
+      { time: "52'", event: "⚽ Goal! Ayew (WHU) — Assist: Soucek" },
+      { time: "NOW", event: "54' — Match in progress" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Brighton+vs+West+Ham",
+    statsUrl: "https://www.premierleague.com/matches/Brighton",
+  },
+  m6: {
+    matchId: "m6",
+    timeline: [
+      { time: "0'", event: "Match starts — Everton vs Wolves" },
+      { time: "12'", event: "⚽ Goal! Calvert-Lewin (EVE)" },
+      { time: "18'", event: "Yellow Card — Semedo (WOL)" },
+      { time: "32'", event: "⚽ Goal! Hwang Hee-chan (WOL)" },
+      { time: "45'", event: "Half Time: Everton 1 - 1 Wolves" },
+      { time: "58'", event: "⚽ Goal! McNeil (EVE)" },
+      { time: "71'", event: "Yellow Card — Lemina (WOL)" },
+      { time: "77'", event: "VAR Review: Handball check — No penalty" },
+      { time: "88'", event: "Yellow Card — Doherty (WOL)" },
+      { time: "90+5'", event: "Full Time: Everton 2 - 1 Wolves" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Everton+vs+Wolves",
+    statsUrl: "https://www.premierleague.com/matches/Everton",
+  },
+};
 
 // ── Mock User ─────────────────────────────────────────────────────────────────
 export const MOCK_USER = {
