@@ -13,7 +13,6 @@ import {
   AUTO_APPROVE_THRESHOLD,
   XLM_USD_RATE,
 } from "@/lib/constants";
->>>>>>> 9f3458e (fix: credit voter rewards to connected wallet and interpolate reward between min and max)
 
 export type VoteDecision = "yes" | "no" | "unclear";
 
