@@ -190,3 +190,65 @@ export function msUntilLock(
 	return Math.max(0, lock - now);
 }
 
+/* ── Voting window ────────────────────────────────────────────────────────── */
+
+/**
+ * Hours that community voting stays open after a poll locks.
+ *
+ * Mirrors `voting_window_seconds` (7200) in the contract. Previously this was
+ * hardcoded as `2 * 60 * 60 * 1000` in `voting-card.tsx`, which is why the
+ * constant existed but had no consumers.
+ */
+export const VOTING_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Epoch ms at which voting on a poll closes: the lock instant plus the voting
+ * window.
+ *
+ * Uses the poll's own `lockTime` rather than raw kickoff, so a `"halftime"`
+ * poll is not treated as having locked at kickoff.
+ */
+export function getVotingDeadline(
+	poll: { lockTime: LockTimeKey },
+	match: { kickoff: string } | undefined,
+): number {
+	if (!match) return Number.NaN;
+	const lock = getLockTimestamp(match.kickoff, poll.lockTime);
+	if (Number.isNaN(lock)) return Number.NaN;
+	return lock + VOTING_WINDOW_MS;
+}
+
+/**
+ * Whether a vote on this poll is still accepted.
+ *
+ * Checked in three places — the card's buttons, the store's `availablePolls()`
+ * filter, and inside `castVote` itself — because each alone is bypassable: the
+ * UI can be stale, `availablePolls()` can be called from a component that
+ * rendered before the deadline, and `castVote` is the only one that runs at
+ * the moment of the write.
+ */
+export function isVotingOpen(
+	poll: { status?: string; lockTime: LockTimeKey },
+	match: { kickoff: string } | undefined,
+	now: number = Date.now(),
+): boolean {
+	if (!match) return false;
+	// A poll must actually be in the voting phase. A still-open poll or one
+	// already resolved is not votable regardless of the clock.
+	if (poll.status !== "voting") return false;
+	const deadline = getVotingDeadline(poll, match);
+	if (Number.isNaN(deadline)) return false;
+	return now < deadline;
+}
+
+/** ISO form of {@link getVotingDeadline}, for `CountdownTimer`. */
+export function getVotingDeadlineISO(
+	poll: { lockTime: LockTimeKey },
+	match: { kickoff: string } | undefined,
+): string {
+	const t = getVotingDeadline(poll, match);
+	if (Number.isNaN(t)) return new Date().toISOString();
+	return new Date(t).toISOString();
+}
+
+

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useReducer } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Scale, CheckCircle2, AlertCircle } from "lucide-react";
+import { Scale, CheckCircle2, AlertCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 import { GlowCard } from "@/components/shared/glow-card";
@@ -19,6 +19,7 @@ import { useVoting, type VoteDecision } from "@/hooks/use-voting";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn, categoryLabel } from "@/lib/utils";
 import { getTeamColor } from "@/lib/team-colors";
+import { getVotingDeadlineISO, isVotingOpen } from "@/lib/calculations";
 
 interface VotingCardProps {
     poll: Poll;
@@ -66,6 +67,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
     };
 
     const handleSelectVote = async (decision: VoteDecision) => {
+        if (!votingOpen) return;
         if (!isConnected) {
             try {
                 await connect();
@@ -102,10 +104,18 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             );
         } catch (error) {
             // Revert on error
-            const msg = error instanceof Error ? error.message : "Vote failed. Please try again.";
-            toast.error("Vote Failed", { description: msg });
             setCardState("idle");
             setSelectedDecision(null);
+            // `castVote` throws when the voting window closed during
+            // confirmation, so surface the reason rather than silently
+            // returning to the buttons — otherwise the card looks broken
+            // rather than out of time.
+            toast.error("Vote not recorded", {
+                description:
+                    error instanceof Error
+                        ? error.message
+                        : "Vote failed. Please try again.",
+            });
         }
     };
 
@@ -114,10 +124,28 @@ export function VotingCard({ poll, match }: VotingCardProps) {
         setSelectedDecision(null);
     };
 
-    // Compute deadline: voting is allowed 2 hours after match lockTime (we use kickoff for demo purposes)
-    // Real implementation would calculate properly. Let's add 2 hours to kickoff for mock.
-    const lockTarget = new Date(match.kickoff).getTime() + 2 * 60 * 60 * 1000;
-    const deadlineTime = new Date(lockTarget).toISOString();
+    /**
+     * Voting deadline, derived from the poll's own lock time.
+     *
+     * The previous version hardcoded `2 * 60 * 60 * 1000` onto raw kickoff,
+     * ignoring `poll.lockTime` — so a `"halftime"` poll was treated as having
+     * locked at kickoff and its voting window closed two minutes too early.
+     */
+    const deadlineTime = getVotingDeadlineISO(poll, match);
+
+    /**
+     * Live open/closed state. `CountdownTimer` already supports an `onExpire`
+     * callback but it was never wired, so the timer could read `00:00:00` while
+     * the buttons beside it stayed fully enabled. A one-second tick derives it
+     * from the shared helper instead, so the countdown and the gate cannot
+     * disagree.
+     */
+    const [, tick] = useReducer((n: number) => n + 1, 0);
+    useEffect(() => {
+        const id = setInterval(tick, 1_000);
+        return () => clearInterval(id);
+    }, []);
+    const votingOpen = isVotingOpen(poll, match);
 
     const getCategoryColor = (cat: string) => {
         switch (cat) {
@@ -151,7 +179,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
                     ) : (
                         <CountdownTimer targetTime={deadlineTime} compact className="text-primary text-sm font-mono" />
                     )}
-                    <span className="text-xs text-muted-foreground">Voting closes 2h post-match</span>
+                    <span className="text-xs text-muted-foreground">Voting closes 2h after the poll locks ({poll.lockTime})</span>
                 </div>
             </div>
 
@@ -185,7 +213,20 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             {/* Interaction Area */}
             <div className="relative min-h-[140px] flex flex-col justify-end">
                 <AnimatePresence mode="wait">
-                    {cardState === "idle" && (
+                    {cardState === "idle" && !votingOpen && (
+                        <motion.div
+                            key="voting-closed"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="flex items-center justify-center gap-3 h-14 rounded clip-corner bg-surface border border-border text-muted-foreground font-bold uppercase tracking-wider text-sm"
+                            data-testid="voting-closed"
+                        >
+                            <Lock className="w-4 h-4" />
+                            Voting Closed
+                        </motion.div>
+                    )}
+                    {cardState === "idle" && votingOpen && (
                         <motion.div
                             key="voting-options"
                             initial={{ opacity: 0, y: 10 }}
