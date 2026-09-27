@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useReducer, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Zap,
+  Lock,
   Shield,
   ChevronRight,
 } from "lucide-react";
@@ -26,6 +27,9 @@ import {
   formatCurrency,
   formatAddress,
   formatXLM,
+  getLockTargetISO,
+  isPollLocked as computePollLocked,
+  msUntilLock,
 } from "@/lib/calculations";
 import {
   PLATFORM_FEE_PERCENTAGE,
@@ -55,6 +59,27 @@ import {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 type TxStep = "idle" | "confirm" | "processing" | "success" | "failure";
+
+/**
+ * Render a remaining duration compactly: `2d 4h`, `3h 12m`, or `45s`.
+ *
+ * Deliberately local rather than reusing `CompactCountdown`, which renders an
+ * SVG-free chip inside `PollCard` and is not exported. Both read from the same
+ * `msUntilLock` helper, so the number shown here and the number the card locks
+ * on cannot disagree.
+ */
+function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0s";
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 
 interface StakeModalProps {
   poll: Poll;
@@ -507,7 +532,42 @@ export function StakeModal({
     (side === "yes" && poolPct.yes >= 50) ||
     (side === "no" && poolPct.no >= 50);
 
-  const isPollLocked = poll.status !== "active";
+  /**
+   * The match this poll belongs to, resolved from `matchId`.
+   *
+   * The modal receives `matchId` and `matchName` as plain strings rather than
+   * the match object, so the kickoff needed for a clock-based lock check has to
+   * be looked up. Read imperatively rather than through a hook subscription:
+   * the match's kickoff never changes at runtime, and subscribing would
+   * re-render the whole modal on every unrelated mock-data write.
+   */
+  const match = useMockData.getState().getMatch(matchId);
+
+  /**
+   * Lock state, shared with `PollCard` via `computePollLocked`.
+   *
+   * Previously this was `poll.status !== "active"` alone. Because nothing ever
+   * transitions `poll.status` when a lock time passes, a poll whose countdown
+   * had expired could still be confirmed from an already-open modal — the
+   * sticky footer checked `canSubmit`, which consulted this status-only value.
+   * Now it also asks the clock.
+   */
+  const isPollLocked = computePollLocked(poll, match);
+
+  /**
+   * Ticks once a second so an open modal locks itself when the deadline passes
+   * while the user is filling it in, instead of staying submittable until they
+   * happen to re-render for another reason.
+   */
+  const [, forceTick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const id = setInterval(forceTick, 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  /** Live countdown target, so the modal can show how long is left. */
+  const lockTargetISO = match ? getLockTargetISO(match.kickoff, poll.lockTime) : null;
+  const msRemaining = match ? msUntilLock(poll, match) : 0;
 
   // ── Validation ─────────────────────────────────────────────────────────
 
@@ -750,10 +810,20 @@ export function StakeModal({
                       <Users className="w-3.5 h-3.5" />
                       {poll.participants} stakers
                     </span>
-                    {poll.status === "active" && (
+                    {isPollLocked ? (
+                      <span className="flex items-center gap-1.5 text-[var(--muted-foreground)]">
+                        <Lock className="w-3.5 h-3.5" />
+                        Locked at {poll.lockTime}
+                      </span>
+                    ) : (
                       <span className="flex items-center gap-1.5 text-[var(--accent-cyan)]">
                         <Zap className="w-3.5 h-3.5" />
                         Locks at {lockTimeLabel(poll.lockTime)}
+                        {lockTargetISO && (
+                          <span className="font-mono text-[var(--muted-foreground)]">
+                            ({formatCountdown(msRemaining)} left)
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>

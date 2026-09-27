@@ -92,3 +92,83 @@ export function convertUsdToXlm(usd: number): number {
 	return usd / XLM_USD_RATE;
 }
 
+/* ── Poll locking ────────────────────────────────────────────────────────── */
+
+/**
+ * Minutes from kickoff at which each `LockTime` variant closes.
+ *
+ * `halftime` and `60min` are derived offsets rather than absolute times, so
+ * they must live in exactly one place. They were previously duplicated as
+ * bare `52 * 60 * 1000` / `65 * 60 * 1000` literals in two components, which
+ * is how the two drifted apart from the documented values.
+ *
+ * The 65-minute value for `60min` is deliberate: it is 60 minutes of play plus
+ * a 5-minute allowance for stoppage time, halftime, and scheduling delay.
+ */
+export const LOCK_OFFSET_MINUTES = {
+	kickoff: 0,
+	halftime: 52,
+	"60min": 65,
+} as const;
+
+export type LockTimeKey = keyof typeof LOCK_OFFSET_MINUTES;
+
+/**
+ * Resolve the instant at which a poll stops accepting stakes, in epoch ms.
+ *
+ * @param kickoff   ISO kickoff timestamp of the parent match.
+ * @param lockTime  Which of the three lock points this poll uses.
+ * @returns Epoch milliseconds, or `NaN` if `kickoff` is unparseable.
+ */
+export function getLockTimestamp(
+	kickoff: string,
+	lockTime: LockTimeKey,
+): number {
+	const k = new Date(kickoff).getTime();
+	if (Number.isNaN(k)) return Number.NaN;
+	return k + LOCK_OFFSET_MINUTES[lockTime] * 60_000;
+}
+
+/** `getLockTimestamp` as an ISO string, for `useCountdown` and `<time>` elements. */
+export function getLockTargetISO(kickoff: string, lockTime: LockTimeKey): string {
+	const t = getLockTimestamp(kickoff, lockTime);
+	if (Number.isNaN(t)) return kickoff;
+	return new Date(t).toISOString();
+}
+
+/**
+ * Whether a poll must no longer accept stakes.
+ *
+ * Deliberately **time-derived rather than read from `poll.status`**. Nothing in
+ * the codebase ever transitions `poll.status` when a lock time passes, so
+ * `status === "active"` stays true indefinitely — a poll showing a LOCKED
+ * countdown would still accept stakes. The status is still honoured, because a
+ * poll that has already been resolved or moved to voting must be closed
+ * regardless of the clock.
+ *
+ * @param now Injected for testing; defaults to the current time.
+ */
+export function isPollLocked(
+	poll: { status?: string; lockTime: LockTimeKey },
+	match: { kickoff: string } | undefined,
+	now: number = Date.now(),
+): boolean {
+	if (!match) return false;
+	if (poll.status && poll.status !== "active") return true;
+	const lock = getLockTimestamp(match.kickoff, poll.lockTime);
+	if (Number.isNaN(lock)) return false;
+	return now >= lock;
+}
+
+/** Whole milliseconds until the lock, floored at 0. Drives countdown displays. */
+export function msUntilLock(
+	poll: { lockTime: LockTimeKey },
+	match: { kickoff: string } | undefined,
+	now: number = Date.now(),
+): number {
+	if (!match) return 0;
+	const lock = getLockTimestamp(match.kickoff, poll.lockTime);
+	if (Number.isNaN(lock)) return 0;
+	return Math.max(0, lock - now);
+}
+

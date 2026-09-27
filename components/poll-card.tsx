@@ -11,6 +11,7 @@ import { useWallet } from "@/hooks/use-wallet"
 import { useCountdown } from "@/hooks/use-countdown"
 import type { Poll, Match, PollCategory, LockTime } from "@/lib/mock-data"
 import { lockTimeLabel } from "@/lib/mock-data"
+import { getLockTargetISO, isPollLocked } from "@/lib/calculations"
 
 export interface PollCardProps {
   poll: Poll & { timeLeft?: string; recentActivity?: string; isHottest?: boolean }
@@ -39,20 +40,6 @@ const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
     label: "Other",
     className: "bg-foreground/10 text-foreground border border-border",
   },
-}
-
-function getLockTargetISO(kickoff: string, lockTime: LockTime): string {
-  const kickoffTime = new Date(kickoff).getTime()
-  switch (lockTime) {
-    case "kickoff":
-      return kickoff
-    case "halftime":
-      return new Date(kickoffTime + 52 * 60 * 1000).toISOString()
-    case "60min":
-      return new Date(kickoffTime + 65 * 60 * 1000).toISOString()
-    default:
-      return kickoff
-  }
 }
 
 function TeamBadge({ name }: { name: string }) {
@@ -141,6 +128,17 @@ export function PollCard({
   const isVoting = poll.status === "voting"
   const isHighValue = total > 10_000
 
+  /**
+   * Lock state, derived from the clock rather than from `poll.status`.
+   *
+   * Nothing in the codebase transitions `poll.status` when a lock time passes,
+   * so a status check alone let an expired poll keep its live CTA. `isPollLocked`
+   * compares the current time against the poll's lock point and honours `status`
+   * as well, so a resolved or voting poll is closed regardless of the clock.
+   */
+  const timeLocked = isPollLocked(poll, match)
+  const acceptsStakes = isActive && !isLocked && !timeLocked
+
   const category = CATEGORY_STYLES[poll.category] ?? {
     label: poll.category ? String(poll.category).replace("_", " ") : "Poll",
     className: "bg-primary/20 text-primary border border-primary/40",
@@ -156,13 +154,16 @@ export function PollCard({
   }, [isConnected, pendingStake])
 
   const openStake = (side: "yes" | "no") => {
-    if (!isActive) return
+    if (!acceptsStakes) return
     setInitialSide(side)
     setShowStakeModal(true)
   }
 
   const handleCompactStakeClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Belt-and-braces with the button's own `disabled`: a programmatic click or a
+    // keyboard activation racing the countdown must not slip through.
+    if (!acceptsStakes) return
     if (isConnected) {
       setShowStakeModal(true)
     } else {
@@ -282,15 +283,30 @@ export function PollCard({
 
             <Button
               onClick={handleCompactStakeClick}
+              disabled={!acceptsStakes}
+              aria-disabled={!acceptsStakes}
               className={[
                 "w-full h-10 font-bold uppercase tracking-wider text-sm",
                 "bg-primary hover:bg-primary/90 text-background",
                 "glow-cyan hover:shadow-[0_0_25px_rgba(0,217,255,0.5)]",
                 "transition-all hover:scale-[1.02]",
+                // The hover treatments above would otherwise still animate on a
+                // disabled button, which reads as "clickable but broken".
+                !acceptsStakes &&
+                  "opacity-50 cursor-not-allowed hover:bg-primary hover:scale-100 hover:shadow-none",
               ].join(" ")}
             >
-              {isHighValue && <Zap className="mr-1.5 h-4 w-4" />}
-              Stake Now
+              {acceptsStakes ? (
+                <>
+                  {isHighValue && <Zap className="mr-1.5 h-4 w-4" />}
+                  Stake Now
+                </>
+              ) : (
+                <>
+                  <Lock className="mr-1.5 h-4 w-4" />
+                  Locked
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -403,7 +419,7 @@ export function PollCard({
 
             {/* Right: Stake Buttons */}
             <div className="flex lg:flex-col gap-3 min-w-[200px]">
-              {isActive ? (
+              {acceptsStakes ? (
                 <>
                   <GamingButton
                     variant="success"
@@ -422,7 +438,7 @@ export function PollCard({
                     Stake NO →
                   </GamingButton>
                 </>
-              ) : isLocked ? (
+              ) : isLocked || timeLocked ? (
                 <div className="flex items-center justify-center gap-2 py-4 text-accent font-bold uppercase tracking-wider text-sm">
                   <Lock className="h-4 w-4" />
                   Staking Closed
