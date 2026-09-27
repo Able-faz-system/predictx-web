@@ -1,3 +1,4 @@
+import { calculateCompletedPayout } from "@/lib/calculations";
 // All dates are computed relative to new Date() — no hardcoded past/future dates.
 
 const addDays = (n: number, hour = 15): string => {
@@ -782,7 +783,7 @@ export const MOCK_STAKES: Stake[] = [
     resolutionNote: "Admin review",
     wallet: SEED_WALLET,
   },
-  // Completed — 4 wins, 2 losses
+  // Completed — 4 wins, 2 losses (profit and roi computed via calculateCompletedPayout with 5% platform fee applied)
   {
     id: "s6",
     pollId: "m6-p1",
@@ -793,8 +794,8 @@ export const MOCK_STAKES: Stake[] = [
     amount: 100,
     status: "completed",
     outcome: "won",
-    profit: 50,
-    roi: 50.0,
+    profit: calculateCompletedPayout(100, 150).profit,
+    roi: calculateCompletedPayout(100, 150).roi,
     wallet: SEED_WALLET,
   },
   {
@@ -807,8 +808,8 @@ export const MOCK_STAKES: Stake[] = [
     amount: 200,
     status: "completed",
     outcome: "won",
-    profit: 120,
-    roi: 60.0,
+    profit: calculateCompletedPayout(200, 320).profit,
+    roi: calculateCompletedPayout(200, 320).roi,
     wallet: SEED_WALLET,
   },
   {
@@ -821,8 +822,8 @@ export const MOCK_STAKES: Stake[] = [
     amount: 250,
     status: "completed",
     outcome: "won",
-    profit: 187,
-    roi: 74.8,
+    profit: calculateCompletedPayout(250, 437).profit,
+    roi: calculateCompletedPayout(250, 437).roi,
     wallet: SEED_WALLET,
   },
   {
@@ -835,8 +836,8 @@ export const MOCK_STAKES: Stake[] = [
     amount: 400,
     status: "completed",
     outcome: "won",
-    profit: 350,
-    roi: 87.5,
+    profit: calculateCompletedPayout(400, 750).profit,
+    roi: calculateCompletedPayout(400, 750).roi,
     wallet: SEED_WALLET,
   },
   {

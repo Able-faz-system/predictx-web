@@ -8,7 +8,25 @@ export interface WinningsCalculation {
 	roi: number;
 }
 
-const FEE = 0.05;
+export const PLATFORM_FEE = 0.05;
+const FEE = PLATFORM_FEE;
+
+/**
+ * Computes fee-adjusted payout, profit, and ROI for a completed winning stake.
+ *
+ * @param stakeAmount The original amount staked
+ * @param grossPayout The gross payout before platform fee
+ */
+export function calculateCompletedPayout(
+	stakeAmount: number,
+	grossPayout: number,
+): { gross: number; fee: number; net: number; profit: number; roi: number } {
+	const fee = grossPayout * PLATFORM_FEE;
+	const net = grossPayout - fee;
+	const profit = Number((net - stakeAmount).toFixed(2));
+	const roi = Number(((profit / stakeAmount) * 100).toFixed(2));
+	return { gross: grossPayout, fee, net, profit, roi };
+}
 
 export function calculatePotentialWinnings(
 	stakeAmount: number,

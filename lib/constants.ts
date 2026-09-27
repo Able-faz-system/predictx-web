@@ -70,13 +70,68 @@ export const DISPUTE_WINDOW_HOURS = 24;
 export const VOTING_WINDOW_HOURS = 2;
 
 /* Stellar Network*/
+
+export type StellarNetwork = "testnet" | "mainnet";
+
+export interface NetworkConfig {
+  network: StellarNetwork;
+  horizonUrl: string;
+  rpcUrl: string;
+  networkPassphrase: string;
+  explorerUrl: string;
+  contractId: string;
+}
+
+export const STELLAR_NETWORKS: Record<StellarNetwork, NetworkConfig> = {
+  testnet: {
+    network: "testnet",
+    horizonUrl:
+      process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL ||
+      "https://horizon-testnet.stellar.org",
+    rpcUrl:
+      process.env.NEXT_PUBLIC_STELLAR_RPC_URL ||
+      "https://soroban-testnet.stellar.org",
+    networkPassphrase:
+      process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ||
+      "Test SDF Network ; September 2015",
+    explorerUrl:
+      process.env.NEXT_PUBLIC_STELLAR_EXPLORER_URL ||
+      "https://stellar.expert/explorer/testnet",
+    contractId:
+      process.env.NEXT_PUBLIC_CONTRACT_ID ||
+      "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  },
+  mainnet: {
+    network: "mainnet",
+    horizonUrl:
+      process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL ||
+      "https://horizon.stellar.org",
+    rpcUrl:
+      process.env.NEXT_PUBLIC_STELLAR_RPC_URL ||
+      "https://soroban-rpc.mainnet.stellar.org",
+    networkPassphrase:
+      process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE ||
+      "Public Global Stellar Network ; July 2015",
+    explorerUrl:
+      process.env.NEXT_PUBLIC_STELLAR_EXPLORER_URL ||
+      "https://stellar.expert/explorer/public",
+    contractId: process.env.NEXT_PUBLIC_CONTRACT_ID || "",
+  },
+};
 /**
  * Stellar network used for all blockchain interactions.
- * `as const` narrows the type to the literal `"testnet"` so it can be passed
- * to Stellar SDK network config objects without a type cast.
- * Switch to `"mainnet"` for production deployments.
+ * Driven by NEXT_PUBLIC_STELLAR_NETWORK env variable, defaulting to "testnet".
  */
-export const STELLAR_NETWORK = "testnet" as const;
+export const STELLAR_NETWORK: StellarNetwork =
+  (process.env.NEXT_PUBLIC_STELLAR_NETWORK as StellarNetwork) === "mainnet"
+    ? "mainnet"
+    : "testnet";
+
+/**
+ * Active network configuration derived from STELLAR_NETWORK and environment variables.
+ */
+export const CURRENT_NETWORK_CONFIG: NetworkConfig =
+  STELLAR_NETWORKS[STELLAR_NETWORK];
 
 /**
  * Stellar base fee in stroops per operation (1 XLM = 10,000,000 stroops).

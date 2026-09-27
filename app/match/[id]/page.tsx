@@ -13,10 +13,14 @@ import { MatchStatsBar } from "@/components/match";
 export default function MatchPage() {
   const params = useParams<{ id: string }>();
   const matchId = params.id;
-  const { getMatch, getPolls } = useMockData();
+  const allPolls = useMockData((s) => s.polls);
+  const getMatch = useMockData((s) => s.getMatch);
 
   const match = getMatch(matchId);
-  const polls = useMemo(() => getPolls(matchId), [getPolls, matchId]);
+  const polls = useMemo(
+    () => allPolls.filter((p) => p.matchId === matchId),
+    [allPolls, matchId],
+  );
 
   // Aggregate stats
   const totalPool = useMemo(
