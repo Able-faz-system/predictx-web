@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     X,
@@ -263,9 +263,29 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
 
+    // Track the success auto-close timer so we can cancel it on unmount
+    const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Clear the timer when the modal unmounts to prevent state updates on
+    // an unmounted component (e.g. parent destroys modal from outside)
+    useEffect(() => {
+        return () => {
+            if (successTimerRef.current) clearTimeout(successTimerRef.current);
+        };
+    }, []);
+
     const upcomingMatches = MATCHES.filter((m) => m.status === "upcoming");
     const selectedMatch = MATCHES.find((m) => m.id === form.matchId);
-    const matchLabel = selectedMatch ? `${selectedMatch.homeTeam} vs ${selectedMatch.awayTeam}` : "";
+    // If a preselected match is not upcoming (live/completed), ignore it so
+    // the wizard never receives a matchId that bypasses the upcoming-only filter.
+    const effectiveMatchId =
+        selectedMatch && selectedMatch.status !== "upcoming" ? "" : form.matchId;
+    const resolvedMatch = effectiveMatchId
+        ? MATCHES.find((m) => m.id === effectiveMatchId)
+        : undefined;
+    const matchLabel = resolvedMatch
+        ? `${resolvedMatch.homeTeam} vs ${resolvedMatch.awayTeam}`
+        : "";
 
     // ── Validation ─────────────────────────────────────────────────────────────
 
@@ -289,7 +309,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
             setShowWalletModal(true);
             return;
         }
-        if (!selectedMatch || !form.category || !form.lockTime) return;
+        if (!resolvedMatch || !form.category || !form.lockTime) return;
 
         setSubmitting(true);
         setSubmitError("");
@@ -319,7 +339,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 description: "Your prediction has been created!",
             });
 
-            setTimeout(() => {
+            successTimerRef.current = setTimeout(() => {
+                successTimerRef.current = null;
                 setSuccess(false);
                 handleClose();
             }, 2000);
@@ -335,6 +356,13 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     // ── Close / reset ──────────────────────────────────────────────────────────
 
     const handleClose = () => {
+        // Block close while a transaction is in flight — prevents unmounting
+        // the modal mid-transaction and the duplicate-submission bug it causes.
+        if (submitting) return;
+        if (successTimerRef.current) {
+            clearTimeout(successTimerRef.current);
+            successTimerRef.current = null;
+        }
         setStep(1);
         setForm({ matchId: preselectedMatchId ?? "", category: "", question: "", lockTime: "", customLockTime: "" });
         setSubmitting(false);
@@ -348,6 +376,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     // ── Render ────────────────────────────────────────────────────────────────
 
     const charCount = form.question.length;
+    const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= QUESTION_MIN ? "text-primary" : "text-muted-foreground";
+    const lockDisplay = resolvedMatch ? getLockDisplay(form.lockTime, form.customLockTime, resolvedMatch.kickoff) : "—";
     const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= POLL_QUESTION_MIN_LENGTH ? "text-primary" : "text-muted-foreground";
     const lockDisplay = selectedMatch ? getLockDisplay(form.lockTime, form.customLockTime, selectedMatch.kickoff) : "—";
     const showLivePreview = step >= 3;
@@ -360,6 +390,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 onClick={handleClose}
                 style={{
                     backgroundImage: "radial-gradient(circle at 50% 50%, rgba(0,217,255,0.03) 0%, transparent 70%)",
+                    cursor: submitting ? "not-allowed" : "default",
                 }}
             />
 
@@ -392,7 +423,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                         </div>
                         <button
                             onClick={handleClose}
-                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-sm hover:bg-white/5"
+                            disabled={submitting}
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-sm hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <X className="h-5 w-5" />
                         </button>
@@ -657,7 +689,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                                             type="datetime-local"
                                                             value={form.customLockTime}
                                                             onChange={(e) => updateForm({ customLockTime: e.target.value })}
-                                                            max={selectedMatch ? new Date(new Date(selectedMatch.kickoff).getTime() + 105 * 60000).toISOString().slice(0, 16) : undefined}
+                                                            max={resolvedMatch ? new Date(new Date(resolvedMatch.kickoff).getTime() + 105 * 60000).toISOString().slice(0, 16) : undefined}
                                                             className="w-full bg-[#1a1f3a]/80 text-foreground border-2 border-border rounded-lg p-3 outline-none focus:border-primary transition-all text-sm"
                                                         />
                                                     </motion.div>
