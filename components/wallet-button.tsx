@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, ChevronDown, LogOut, Copy, Globe, ArrowRightLeft } from "lucide-react";
+import { Wallet, ChevronDown, LogOut, Copy, Globe, ArrowRightLeft, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { WalletConnectModal } from "./wallet-connect-modal";
 import { useWallet } from "@/hooks/use-wallet";
 import type { StellarNetwork } from "@/hooks/use-wallet";
 import { shortenAddress } from "@/lib/utils";
+import { resetAllData } from "@/lib/mock-data";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -117,6 +118,24 @@ export function WalletButton() {
         <DropdownMenuItem asChild>
           <Link href="/dashboard?tab=completed">Transaction History</Link>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={() => {
+            if (
+              typeof window !== "undefined" &&
+              window.confirm("Reset all demo data (polls, stakes, votes, and wallet) to initial state?")
+            ) {
+              resetAllData();
+              window.location.reload();
+            }
+          }}
+          className="text-destructive focus:text-destructive cursor-pointer"
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Reset Demo Data
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onClick={disconnect}>

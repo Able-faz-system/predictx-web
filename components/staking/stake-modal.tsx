@@ -1045,13 +1045,15 @@ export function StakeModal({
                     </div>
 
                     <div className="flex-1 space-y-2 text-xs font-mono">
+                      {/* Legend rows show the base pool values so that
+                          Yes + No + Your Stake = Total (no double-count). */}
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-sm bg-[#00d9ff]" />
                         <span className="text-[var(--muted-foreground)]">
                           Yes Pool
                         </span>
                         <span className="ml-auto text-foreground">
-                          {formatCurrency(previewYes)} ({previewPct.yes}%)
+                          {formatCurrency(poll.yesPool)} ({previewPct.yes}%)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1060,7 +1062,7 @@ export function StakeModal({
                           No Pool
                         </span>
                         <span className="ml-auto text-foreground">
-                          {formatCurrency(previewNo)} ({previewPct.no}%)
+                          {formatCurrency(poll.noPool)} ({previewPct.no}%)
                         </span>
                       </div>
                       {stakeAmount > 0 && (

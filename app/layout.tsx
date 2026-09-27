@@ -7,8 +7,10 @@ import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav"
 import { Header } from "@/components/layout/Header"
+import { HudBar } from "@/components/layout/hud-bar"
 import { PageTransition } from "@/components/layout/page-transition"
 import { ScreenFlashOverlay } from "@/hooks/use-screen-flash"
+import { ErrorHandlerMount } from "@/components/shared/error-handler-mount"
 
 
 // Display font - bold, all-caps, aggressive
@@ -68,13 +70,18 @@ export default function RootLayout({
           minHeight: "100vh",
         }}>
 
-        <div className="md:pt-16 pb-16 md:pb-0">
-          <Header />
-        </div>
+        {/* Header is fixed top-0 (h-16). HUD bar sits just below it on desktop. */}
+        <Header />
+        {/* HudBar handles both desktop (fixed below header) and mobile (fixed above bottom nav) */}
+        <HudBar />
+
+        {/* Content: pad for header (4rem) on desktop */}
+        <div className="md:pt-16 pb-16 md:pb-0" />
         <PageTransition>
           {children}
         </PageTransition>
         <ScreenFlashOverlay />
+        <ErrorHandlerMount />
         <Toaster theme="dark" position="bottom-right" />
         <Analytics />
         <MobileBottomNav />

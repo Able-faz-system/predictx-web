@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { PollCard } from "@/components/poll-card"
 import { GamingTabs, GlowCard, GamingButton } from "@/components/shared"
+import { CardErrorBoundary } from "@/components/shared/card-error-boundary"
 import type { Poll, Match, PollCategory } from "@/lib/mock-data"
 
 /* ── Sort types ──────────────────────────────────────────────────────────── */
@@ -289,11 +290,13 @@ export function PollsList({ polls, match }: PollsListProps) {
                   <PollStatusBadge status={poll.status} outcome={poll.outcome} />
                 </div>
 
-                <PollCard
-                  poll={poll}
-                  matchId={match.id}
-                  matchName={matchName}
-                />
+                <CardErrorBoundary componentName={`PollCard(${poll.id})`}>
+                  <PollCard
+                    poll={poll}
+                    matchId={match.id}
+                    matchName={matchName}
+                  />
+                </CardErrorBoundary>
               </motion.div>
             ))}
           </motion.div>

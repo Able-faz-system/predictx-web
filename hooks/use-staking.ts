@@ -9,6 +9,7 @@ import {
 } from "@/lib/calculations";
 import { useMockData } from "@/hooks/use-mock-data";
 import { useWallet, type TransactionReceipt } from "@/hooks/use-wallet";
+import { trackEvent } from "@/lib/analytics";
 
 interface StakingState {
 	stakes: Stake[];
@@ -58,8 +59,10 @@ export const useStaking = create<StakingState>()(
 						`Staked $${amount} on "${question}" – ${side.toUpperCase()}`,
 					);
 
-				// Update the poll pool in mock data store
-				useMockData.getState().updatePollPool(pollId, side, amount);
+				// Update the poll pool in mock data store, passing the wallet
+				// address so participants counts distinct wallets only
+				const walletAddress = useWallet.getState().address ?? undefined;
+				useMockData.getState().updatePollPool(pollId, side, amount, walletAddress);
 
 				const stake: Stake = {
 					id: `stake-${receipt.hash.slice(0, 8)}`,
@@ -73,6 +76,17 @@ export const useStaking = create<StakingState>()(
 				};
 
 				set((s) => ({ stakes: [...s.stakes, stake] }));
+
+				// Analytics — no wallet address or seeds
+				const poll = useMockData.getState().getPoll(pollId);
+				trackEvent({
+					name: "stake_placed",
+					pollCategory: poll?.category ?? "other",
+					matchId,
+					side,
+					amountUSD: amount,
+				});
+
 				return { stake, receipt };
 			},
 

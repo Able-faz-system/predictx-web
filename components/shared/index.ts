@@ -30,5 +30,15 @@ export { AchievementToast } from "./achievement-toast";
 // Icon wrapper
 export { GlowIcon } from "./glow-icon";
 
+// Error boundaries
+export { CardErrorBoundary } from "./card-error-boundary";
+export { ErrorFallback } from "./error-fallback";
+export { ErrorHandlerMount } from "./error-handler-mount";
+
 // Re-export types where needed
 export type { Team } from "./team-badge";
+
+// State components
+export { LoadingSpinner } from "./loading-spinner";
+export { ErrorState } from "./error-state";
+export { EmptyState } from "./empty-state";

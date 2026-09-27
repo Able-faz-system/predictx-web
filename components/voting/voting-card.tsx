@@ -18,6 +18,7 @@ import { type Poll, type Match } from "@/lib/mock-data";
 import { useVoting, type VoteDecision } from "@/hooks/use-voting";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
+import { getTeamColor } from "@/lib/team-colors";
 
 interface VotingCardProps {
     poll: Poll;
@@ -30,7 +31,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
     const [cardState, setCardState] = useState<CardState>("idle");
     const [selectedDecision, setSelectedDecision] = useState<VoteDecision | null>(null);
 
-    const { castVote, getVoteReward } = useVoting();
+    const { castVote, getVoteReward, getUnclearVotes } = useVoting();
     const { isConnected, connect } = useWallet();
 
     const rewardAmount = getVoteReward(poll.id);
@@ -38,12 +39,12 @@ export function VotingCard({ poll, match }: VotingCardProps) {
     const homeTeam = {
         id: `home-${match.id}`,
         name: match.homeTeam,
-        primaryColor: "#00d9ff",
+        primaryColor: getTeamColor(match.homeTeam),
     };
     const awayTeam = {
         id: `away-${match.id}`,
         name: match.awayTeam,
-        primaryColor: "#ff006e",
+        primaryColor: getTeamColor(match.awayTeam),
     };
 
     const handleSelectVote = (decision: VoteDecision) => {
@@ -78,6 +79,8 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             );
         } catch (error) {
             // Revert on error
+            const msg = error instanceof Error ? error.message : "Vote failed. Please try again.";
+            toast.error("Vote Failed", { description: msg });
             setCardState("idle");
             setSelectedDecision(null);
         }
@@ -153,7 +156,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             {/* Vote Tally */}
             <div className="mb-6 p-4 rounded-lg bg-background/50 border border-border">
                 <h4 className="text-xs uppercase tracking-widest text-muted-foreground mb-4 font-bold">Community Tally</h4>
-                <VoteTally yesVotes={poll.yesPool} noVotes={poll.noPool} unclearVotes={Math.floor(poll.participants / 3)} animated />
+                <VoteTally yesVotes={poll.yesPool} noVotes={poll.noPool} unclearVotes={getUnclearVotes(poll.id)} animated />
             </div>
 
             {/* Interaction Area */}

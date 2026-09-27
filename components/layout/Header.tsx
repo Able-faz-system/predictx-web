@@ -6,12 +6,13 @@ import { Menu, X } from "lucide-react"
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import { Button } from "../ui/button"
+import { t } from "@/lib/i18n"
 
 const navigation = [
-  { name: "Home", href: "/" },
-  { name: "Dashboard", href: "/dashboard" },
-  { name: "Voting", href: "/voting", badge: 3 },
-  { name: "How It Works", href: "/how-it-works" },
+  { name: "Home", key: "nav.home", href: "/" },
+  { name: "Dashboard", key: "nav.dashboard", href: "/dashboard" },
+  { name: "Voting", key: "nav.voting", href: "/voting", badge: 3 },
+  { name: "How It Works", key: "nav.howItWorks", href: "/how-it-works" },
 ]
 
 export function Header() {
@@ -44,7 +45,7 @@ export function Header() {
                   className="relative text-sm font-bold"
                 >
 
-                  {item.name}
+                  {t(item.key)}
 
                   {item.badge && (
                     <span className="ml-2 text-xs bg-primary text-black px-1 rounded">
@@ -98,7 +99,7 @@ export function Header() {
               onClick={() => setMobileMenuOpen(false)}
               className="text-2xl py-4"
             >
-              {item.name}
+              {t(item.key)}
             </Link>
 
           ))}

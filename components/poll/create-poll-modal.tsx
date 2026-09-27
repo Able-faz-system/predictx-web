@@ -20,11 +20,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MATCHES, type Poll, type PollCategory, type LockTime } from "@/lib/mock-data";
+import { POLL_QUESTION_MIN_LENGTH, POLL_QUESTION_MAX_LENGTH } from "@/lib/constants";
 import { useMockData } from "@/hooks/use-mock-data";
 import { useWallet } from "@/hooks/use-wallet";
 import { WalletConnectModal } from "@/components/wallet-connect-modal";
 import { GamingButton } from "@/components/shared/gaming-button";
 import { cn } from "@/lib/utils";
+import { CREATE_POLL_FEE_XLM } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,8 +47,6 @@ interface FormState {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEPS = ["Match", "Category", "Question", "Lock Time"] as const;
-const QUESTION_MAX = 120;
-const QUESTION_MIN = 10;
 
 const CATEGORY_OPTIONS: Array<{
     value: PollCategory;
@@ -292,7 +292,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     const canGoNext = useCallback(() => {
         if (step === 1) return !!form.matchId;
         if (step === 2) return !!form.category;
-        if (step === 3) return form.question.length >= QUESTION_MIN && form.question.length <= QUESTION_MAX;
+        if (step === 3) return form.question.length >= POLL_QUESTION_MIN_LENGTH && form.question.length <= POLL_QUESTION_MAX_LENGTH;
         if (step === 4) return !!form.lockTime && (form.lockTime !== "custom" || !!form.customLockTime);
         return false;
     }, [step, form]);
@@ -315,7 +315,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
         setSubmitError("");
 
         try {
-            await sendTransaction(0, `Create poll: ${form.question}`);
+            await sendTransaction(CREATE_POLL_FEE_XLM, `Create poll: ${form.question}`);
 
             const newPoll: Poll = {
                 id: generatePollId(),
@@ -325,6 +325,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 yesPool: 0,
                 noPool: 0,
                 participants: 0,
+                stakeCount: 0,
+                stakers: [],
                 status: "active",
                 lockTime: (form.lockTime === "custom" ? "kickoff" : form.lockTime) as LockTime,
                 recentActivity: "Just created",
@@ -376,6 +378,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     const charCount = form.question.length;
     const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= QUESTION_MIN ? "text-primary" : "text-muted-foreground";
     const lockDisplay = resolvedMatch ? getLockDisplay(form.lockTime, form.customLockTime, resolvedMatch.kickoff) : "—";
+    const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= POLL_QUESTION_MIN_LENGTH ? "text-primary" : "text-muted-foreground";
+    const lockDisplay = selectedMatch ? getLockDisplay(form.lockTime, form.customLockTime, selectedMatch.kickoff) : "—";
     const showLivePreview = step >= 3;
 
     return (
@@ -559,25 +563,25 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                             <div className="relative">
                                                 <textarea
                                                     value={form.question}
-                                                    onChange={(e) => updateForm({ question: e.target.value.slice(0, QUESTION_MAX) })}
+                                                    onChange={(e) => updateForm({ question: e.target.value.slice(0, POLL_QUESTION_MAX_LENGTH) })}
                                                     placeholder="e.g., Will Palmer score a goal?"
                                                     rows={3}
                                                     className={cn(
                                                         "w-full bg-[#1a1f3a]/80 text-foreground placeholder:text-muted-foreground",
                                                         "p-4 rounded-lg border-2 resize-none outline-none transition-all font-medium",
                                                         "focus:border-primary focus:shadow-[0_0_20px_rgba(0,217,255,0.3)]",
-                                                        charCount > QUESTION_MAX ? "border-[#ff006e]" : "border-border"
+                                                        charCount > POLL_QUESTION_MAX_LENGTH ? "border-[#ff006e]" : "border-border"
                                                     )}
                                                     style={{ caretColor: "#00d9ff" }}
                                                 />
                                                 <span className={cn("absolute bottom-3 right-3 text-xs font-mono", charColor)}>
-                                                    {charCount}/{QUESTION_MAX}
+                                                    {charCount}/{POLL_QUESTION_MAX_LENGTH}
                                                 </span>
                                             </div>
 
-                                            {charCount < QUESTION_MIN && charCount > 0 && (
+                                            {charCount < POLL_QUESTION_MIN_LENGTH && charCount > 0 && (
                                                 <p className="text-xs text-[#ff006e] flex items-center gap-1">
-                                                    <AlertCircle className="h-3 w-3" /> Minimum {QUESTION_MIN} characters
+                                                    <AlertCircle className="h-3 w-3" /> Minimum {POLL_QUESTION_MIN_LENGTH} characters
                                                 </p>
                                             )}
 
@@ -701,7 +705,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                             {/* Fee notice */}
                                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                                                 <AlertCircle className="h-3 w-3" />
-                                                Creating a poll costs approximately 0.001 XLM in network fees
+                                                Creating a poll costs {CREATE_POLL_FEE_XLM} XLM in network fees
                                             </p>
 
                                             {/* Error */}
