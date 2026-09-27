@@ -42,9 +42,28 @@ interface MockDataState {
   addPoll: (poll: Poll) => void;
 }
 
+/**
+ * Merge freshly-computed MATCHES timestamps into persisted state.
+ *
+ * MATCHES is evaluated at module-load time (every page load), so its `kickoff`
+ * values are always relative to *now*.  Persisted state may have stale ISO
+ * strings from a previous session.  We overwrite only the time-sensitive
+ * `kickoff` and `status` fields while preserving any pool mutations the user
+ * made in-session (e.g. `score` updates from live matches — those stay).
+ */
+function refreshMatchTimestamps(persisted: Match[]): Match[] {
+  const freshById = new Map(MATCHES.map((m) => [m.id, m]));
+  return persisted.map((m) => {
+    const fresh = freshById.get(m.id);
+    if (!fresh) return m;
+    return { ...m, kickoff: fresh.kickoff, status: fresh.status };
+  });
+}
+
 export const useMockData = create<MockDataState>()(
   persist(
     (set, get) => ({
+      // Seed initial state from the always-fresh source constants.
       matches: MATCHES,
       polls: POLLS,
       platformStats: PLATFORM_STATS,
@@ -121,22 +140,46 @@ export const useMockData = create<MockDataState>()(
     }),
     {
       name: STORAGE_KEYS.pools,
-
       /**
-       * Migration: recompute `participants` from `stakers` on rehydration.
-       * Fixes any inflated counts persisted before this fix was applied.
+       * After zustand rehydrates from localStorage, fix up two classes of
+       * staleness that a returning user would otherwise see:
+       *
+       *  1. Timestamps relative to "now" (MATCHES is recomputed on every page
+       *     load) plus poll status, which is driven by match status.
+       *  2. `participants`, which may be inflated relative to `stakers` from
+       *     before the recompute fix was applied.
+       *
+       * Pool-size mutations the user accumulated in-session are preserved.
        */
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+
+        // Refresh match kickoff/status fields from freshly-computed constants.
+        state.matches = refreshMatchTimestamps(state.matches);
+
+        const freshPollsById = new Map(POLLS.map((p) => [p.id, p]));
+
         state.polls = state.polls.map((poll) => {
-          if (!Array.isArray(poll.stakers)) {
-            return { ...poll, stakers: [], stakeCount: poll.stakeCount ?? 0 };
+          let next = poll;
+
+          // Re-seed status from the source dataset so lock/voting progression
+          // is correct. User-created polls (not in POLLS) are left as-is.
+          const fresh = freshPollsById.get(poll.id);
+          if (fresh && fresh.status !== poll.status) {
+            next = { ...next, status: fresh.status };
           }
-          const uniqueCount = new Set(poll.stakers).size;
-          if (uniqueCount > 0 && uniqueCount !== poll.participants) {
-            return { ...poll, participants: uniqueCount };
+
+          // Recompute `participants` from `stakers`.
+          if (!Array.isArray(next.stakers)) {
+            next = { ...next, stakers: [], stakeCount: next.stakeCount ?? 0 };
+          } else {
+            const uniqueCount = new Set(next.stakers).size;
+            if (uniqueCount > 0 && uniqueCount !== next.participants) {
+              next = { ...next, participants: uniqueCount };
+            }
           }
-          return poll;
+
+          return next;
         });
       },
     },

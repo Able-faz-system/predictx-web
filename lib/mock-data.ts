@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   stakes: "predictx_stakes",
   votes: "predictx_votes",
   pools: "predictx_pools",
+  transactions: "predictx_transactions",
 };
 
 export function resetAllData() {

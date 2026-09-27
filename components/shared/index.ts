@@ -17,7 +17,6 @@ export { PoolProgressBar } from "./pool-progress-bar";
 export { GamingButton } from "./gaming-button";
 export { GamingInput } from "./gaming-input";
 export { GamingTabs } from "./gaming-tabs";
-export { ToggleSwitch } from "./toggle-switch";
 
 // Badge components
 export { BadgeComponent } from "./badge-component";

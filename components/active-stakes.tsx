@@ -98,8 +98,10 @@ export function ActiveStakes() {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Potential ROI</div>
-                    <div className={`font-mono font-bold text-lg ${roi > 0 ? "text-success" : "text-accent"}`}>
-                      +{roi.toFixed(0)}%
+                    <div
+                      className={`font-mono font-bold text-lg ${roi > 0 ? "text-success" : roi < 0 ? "text-accent" : "text-muted-foreground"}`}
+                    >
+                      {roi > 0 ? "+" : ""}{roi.toFixed(0)}%
                     </div>
                   </div>
                 </div>
