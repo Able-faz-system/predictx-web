@@ -17,7 +17,7 @@ import { EvidenceSection } from "./evidence-section";
 import { type Poll, type Match } from "@/lib/mock-data";
 import { useVoting, type VoteDecision } from "@/hooks/use-voting";
 import { useWallet } from "@/hooks/use-wallet";
-import { cn } from "@/lib/utils";
+import { cn, categoryLabel } from "@/lib/utils";
 import { getTeamColor } from "@/lib/team-colors";
 
 interface VotingCardProps {
@@ -136,7 +136,7 @@ export function VotingCard({ poll, match }: VotingCardProps) {
             <div className="mb-6 space-y-3">
                 <div className="flex items-center gap-2">
                     <span className={cn("px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border", getCategoryColor(poll.category))}>
-                        {poll.category.replace("_", " ")}
+                        {categoryLabel(poll.category)}
                     </span>
                     <span className="text-xs text-muted-foreground font-mono">#{poll.id}</span>
                 </div>

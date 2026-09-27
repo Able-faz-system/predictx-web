@@ -19,7 +19,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
 
-import { cn } from "@/lib/utils";
+import { cn, categoryLabel } from "@/lib/utils";
 import {
   calculatePotentialWinnings,
   calculatePoolPercentages,
@@ -726,7 +726,7 @@ export function StakeModal({
                 {/* ─── Section 1: Poll Header ─── */}
                 <div className="space-y-3 pr-8">
                   <span className="inline-block px-2.5 py-1 rounded text-xs font-bold uppercase tracking-widest bg-[var(--accent-cyan)]/15 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/20">
-                    {poll.category.replace("_", " ")}
+                    {categoryLabel(poll.category)}
                   </span>
 
                   <h2 className="font-display text-2xl md:text-3xl font-black text-foreground leading-tight">
