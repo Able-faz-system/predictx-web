@@ -7,7 +7,7 @@ const addDays = (n: number, hour = 15): string => {
   return d.toISOString();
 };
 
-export const XLM_RATE = 0.12; // 1 XLM ≈ $0.12
+import { XLM_USD_RATE } from "@/lib/constants";
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 export const STORAGE_KEYS = {
@@ -500,7 +500,7 @@ export const MOCK_USER = {
   address: "GDKXJNLE2YQFPQZ5TK3VZRKPTMJ4OLR3QB7IU6FSCZ6KQF7H4V29F3H",
   displayAddress: "GDKX...9F3H",
   balanceUSD: 2500,
-  balanceXLM: 2500 / XLM_RATE, // ~20,833 XLM
+  balanceXLM: 2500 / XLM_USD_RATE, // ~20,833 XLM
 };
 
 export const MOCK_BADGES = ["Early Predictor", "3-Win Streak"];
@@ -692,7 +692,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
     type: "stake",
     amount: 200,
-    amountXLM: 200 / XLM_RATE,
+    amountXLM: 200 / XLM_USD_RATE,
     description: 'Staked $200 on "Will Palmer score?" – YES',
     timestamp: addDays(-3, 10),
     ledger: 50_123_456,
@@ -703,7 +703,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "b4e5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5",
     type: "stake",
     amount: 500,
-    amountXLM: 500 / XLM_RATE,
+    amountXLM: 500 / XLM_USD_RATE,
     description: 'Staked $500 on "Will Arsenal keep a clean sheet?" – NO',
     timestamp: addDays(-3, 11),
     ledger: 50_123_789,
@@ -714,7 +714,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "c5f6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
     type: "stake",
     amount: 150,
-    amountXLM: 150 / XLM_RATE,
+    amountXLM: 150 / XLM_USD_RATE,
     description: 'Staked $150 on "Will total goals be over 2.5?" – YES',
     timestamp: addDays(-2, 14),
     ledger: 50_134_012,
@@ -725,7 +725,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "d6a7e8f9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
     type: "claim",
     amount: 437,
-    amountXLM: 437 / XLM_RATE,
+    amountXLM: 437 / XLM_USD_RATE,
     description: 'Claimed winnings from "Will Brighton win?" pool',
     timestamp: addDays(-1, 18),
     ledger: 50_145_678,
@@ -736,7 +736,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "e7b8f9a0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
     type: "vote_reward",
     amount: 15,
-    amountXLM: 15 / XLM_RATE,
+    amountXLM: 15 / XLM_USD_RATE,
     description: 'Vote reward for resolving "Will Everton win?" poll',
     timestamp: addDays(-1, 19),
     ledger: 50_145_901,
@@ -747,7 +747,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "f8c9a0b1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
     type: "vote_reward",
     amount: 8,
-    amountXLM: 8 / XLM_RATE,
+    amountXLM: 8 / XLM_USD_RATE,
     description: "Vote reward for resolving VAR review poll",
     timestamp: addDays(0, 9),
     ledger: 50_156_234,
