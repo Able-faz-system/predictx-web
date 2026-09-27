@@ -65,9 +65,14 @@ export function VotingCard({ poll, match }: VotingCardProps) {
         primaryColor: getTeamColor(match.awayTeam),
     };
 
-    const handleSelectVote = (decision: VoteDecision) => {
+    const handleSelectVote = async (decision: VoteDecision) => {
         if (!isConnected) {
-            connect();
+            try {
+                await connect();
+            } catch {
+                // connect() already surfaces errors via toast; swallow here to avoid
+                // double-reporting or an unhandled rejection at the call site.
+            }
             return;
         }
         setSelectedDecision(decision);
