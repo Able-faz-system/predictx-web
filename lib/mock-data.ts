@@ -21,7 +21,6 @@ export function resetAllData() {
   if (typeof window === "undefined") return;
   Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
   localStorage.removeItem("wallet-storage");
-  localStorage.removeItem("predictx_wallet");
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
