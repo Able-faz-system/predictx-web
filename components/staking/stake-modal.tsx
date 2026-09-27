@@ -247,10 +247,18 @@ function SuccessOverlay({
 }) {
   const [copied, setCopied] = useState(false);
 
-  const copyHash = () => {
-    navigator.clipboard.writeText(receipt.hash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyHash = async () => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard not available in this context");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(receipt.hash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy transaction hash");
+    }
   };
 
   // Auto-close after 5s

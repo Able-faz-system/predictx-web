@@ -32,9 +32,17 @@ export function WalletButton() {
 
   const { isConnected, address, balance, disconnect, network, switchNetwork } = useWallet();
 
-  const copy = () => {
-    navigator.clipboard.writeText(address);
-    toast.success("Address copied!");
+  const copy = async () => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard not available in this context");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(address);
+      toast.success("Address copied!");
+    } catch {
+      toast.error("Failed to copy address");
+    }
   };
 
   if (!isConnected)
