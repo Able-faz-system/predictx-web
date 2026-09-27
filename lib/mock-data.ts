@@ -34,6 +34,41 @@ export type PollCategory =
   | "other";
 export type WalletProvider = "Freighter" | "Lobstr" | "xBull";
 
+/**
+ * Returns a human-readable label for a poll's lock time.
+ *
+ * - `"kickoff"`  → "At Kick-off"
+ * - `"halftime"` → "At Half-Time (45')"
+ * - `"60min"`    → "At 60th Minute"
+ * - ISO datetime → localised date/time string (custom lock)
+ *
+ * Use this everywhere a lock time is shown to the user so that
+ * raw enum values ("kickoff", "halftime", "60min") never appear as UI copy.
+ */
+export function lockTimeLabel(lockTime: LockTime | string): string {
+  switch (lockTime) {
+    case "kickoff":
+      return "At Kick-off";
+    case "halftime":
+      return "At Half-Time (45')";
+    case "60min":
+      return "At 60th Minute";
+    default: {
+      // Treat unrecognised values as ISO datetime strings (custom lock)
+      const d = new Date(lockTime);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return lockTime;
+    }
+  }
+}
+
 export interface Match {
   id: string;
   homeTeam: string;

@@ -10,6 +10,7 @@ import { WalletConnectModal } from "@/components/wallet-connect-modal"
 import { useWallet } from "@/hooks/use-wallet"
 import { useCountdown } from "@/hooks/use-countdown"
 import type { Poll, Match, PollCategory, LockTime } from "@/lib/mock-data"
+import { lockTimeLabel } from "@/lib/mock-data"
 
 export interface PollCardProps {
   poll: Poll & { timeLeft?: string; recentActivity?: string; isHottest?: boolean }
@@ -339,7 +340,7 @@ export function PollCard({
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-background rounded text-xs font-mono font-bold text-primary whitespace-nowrap">
                   <Clock className="h-4 w-4" />
-                  {poll.timeLeft ?? poll.lockTime}
+                  {poll.timeLeft ?? lockTimeLabel(poll.lockTime)}
                 </div>
               </div>
 
@@ -350,7 +351,7 @@ export function PollCard({
                 </div>
                 <div className="flex items-center gap-1">
                   <Info className="h-4 w-4" />
-                  <span>Locks: {poll.lockTime}</span>
+                  <span>Locks: {lockTimeLabel(poll.lockTime)}</span>
                 </div>
               </div>
 

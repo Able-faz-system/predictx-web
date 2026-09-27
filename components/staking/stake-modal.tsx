@@ -37,6 +37,7 @@ import {
   STELLAR_BASE_FEE,
 } from "@/lib/constants";
 import type { Poll, Match, Stake } from "@/lib/mock-data";
+import { lockTimeLabel } from "@/lib/mock-data";
 
 import { useWallet, type TransactionReceipt } from "@/hooks/use-wallet";
 import { useStaking } from "@/hooks/use-staking";
@@ -744,7 +745,7 @@ export function StakeModal({
                     {poll.status === "active" && (
                       <span className="flex items-center gap-1.5 text-[var(--accent-cyan)]">
                         <Zap className="w-3.5 h-3.5" />
-                        Locks at {poll.lockTime}
+                        Locks at {lockTimeLabel(poll.lockTime)}
                       </span>
                     )}
                   </div>
