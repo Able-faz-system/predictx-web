@@ -26,6 +26,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { WalletConnectModal } from "@/components/wallet-connect-modal";
 import { GamingButton } from "@/components/shared/gaming-button";
 import { cn } from "@/lib/utils";
+import { CREATE_POLL_FEE_XLM } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -294,7 +295,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
         setSubmitError("");
 
         try {
-            await sendTransaction(0, `Create poll: ${form.question}`);
+            await sendTransaction(CREATE_POLL_FEE_XLM, `Create poll: ${form.question}`);
 
             const newPoll: Poll = {
                 id: generatePollId(),
@@ -670,7 +671,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                             {/* Fee notice */}
                                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                                                 <AlertCircle className="h-3 w-3" />
-                                                Creating a poll costs approximately 0.001 XLM in network fees
+                                                Creating a poll costs {CREATE_POLL_FEE_XLM} XLM in network fees
                                             </p>
 
                                             {/* Error */}
