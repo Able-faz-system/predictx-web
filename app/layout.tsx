@@ -9,7 +9,6 @@ import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav"
 import { Header } from "@/components/layout/Header"
 import { HudBar } from "@/components/layout/hud-bar"
 import { PageTransition } from "@/components/layout/page-transition"
-import { ScreenFlashOverlay } from "@/hooks/use-screen-flash"
 import { ErrorHandlerMount } from "@/components/shared/error-handler-mount"
 
 
@@ -80,7 +79,6 @@ export default function RootLayout({
         <PageTransition>
           {children}
         </PageTransition>
-        <ScreenFlashOverlay />
         <ErrorHandlerMount />
         <Toaster theme="dark" position="bottom-right" />
         <Analytics />
