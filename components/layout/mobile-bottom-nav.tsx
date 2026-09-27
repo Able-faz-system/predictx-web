@@ -40,6 +40,7 @@ export function MobileBottomNav() {
       <nav
         aria-label="Mobile navigation"
         className="fixed bottom-0 left-0 w-full md:hidden z-50 bg-background/95 backdrop-blur-md border-t border-primary/30 flex justify-around items-center py-2"
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         {items.map((item) => {
           const Icon = item.icon
@@ -50,7 +51,7 @@ export function MobileBottomNav() {
               key={item.label}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="flex flex-col items-center justify-center flex-1 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md py-1"
+              className="flex flex-col items-center justify-center flex-1 group min-h-[48px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md py-1"
             >
               <Icon
                 className={`h-6 w-6 transition-all duration-300 motion-reduce:transition-none ${
@@ -76,7 +77,7 @@ export function MobileBottomNav() {
           type="button"
           aria-label={isConnected ? "Open wallet dashboard" : "Connect wallet"}
           onClick={handleWalletClick}
-          className={`flex flex-col items-center flex-1 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md py-1 ${
+          className={`flex flex-col items-center flex-1 group min-h-[48px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md py-1 ${
             isConnected ? "text-primary" : ""
           }`}
         >

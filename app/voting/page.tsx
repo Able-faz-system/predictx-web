@@ -54,7 +54,7 @@ export default function VotingCenterPage() {
         <div className="mx-auto max-w-5xl px-4 lg:px-8 relative z-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-1 h-10 bg-[var(--accent-cyan)] shadow-[0_0_15px_rgba(0,217,255,0.8)]" />
-            <h1 className="font-display text-4xl font-black uppercase text-[var(--accent-cyan)] text-glow-cyan">
+            <h1 className="font-display text-2xl sm:text-4xl font-black uppercase text-[var(--accent-cyan)] text-glow-cyan">
               Resolution Arena
             </h1>
           </div>

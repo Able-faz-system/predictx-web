@@ -393,7 +393,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
             />
 
             {/* Modal */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.92, y: 32 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -401,10 +401,11 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                     transition={{ type: "spring", stiffness: 300, damping: 28 }}
                     className={cn(
                         "pointer-events-auto bg-[#0d1025] border border-primary/30 shadow-[0_0_60px_rgba(0,217,255,0.12)]",
-                        "w-full max-h-[90vh] overflow-hidden flex flex-col",
-                        "sm:rounded-xl",
+                        "w-full flex flex-col",
+                        "h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:overflow-hidden",
+                        "sm:rounded-xl rounded-none",
                         // Desktop with preview: wider
-                        showLivePreview ? "max-w-4xl" : "max-w-xl"
+                        showLivePreview ? "sm:max-w-4xl" : "sm:max-w-xl"
                     )}
                     style={{
                         clipPath: "polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)",
