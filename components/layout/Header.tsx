@@ -6,12 +6,13 @@ import { Menu, X } from "lucide-react"
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import { Button } from "../ui/button"
+import { t } from "@/lib/i18n"
 
 const navigation = [
-  { name: "Home", href: "/" },
-  { name: "Dashboard", href: "/dashboard" },
-  { name: "Voting", href: "/voting", badge: 3 },
-  { name: "How It Works", href: "/how-it-works" },
+  { name: "Home", key: "nav.home", href: "/" },
+  { name: "Dashboard", key: "nav.dashboard", href: "/dashboard" },
+  { name: "Voting", key: "nav.voting", href: "/voting", badge: 3 },
+  { name: "How It Works", key: "nav.howItWorks", href: "/how-it-works" },
 ]
 
 export function Header() {
@@ -25,7 +26,7 @@ export function Header() {
         <nav className="mx-auto flex max-w-7xl items-center justify-between p-4">
 
           {/* Logo */}
-          <Link href="/" className="font-display text-2xl text-primary text-glow-cyan font-bold">
+          <Link href="/" className="font-display text-xl sm:text-2xl text-primary text-glow-cyan font-bold">
             PredictX
           </Link>
 
@@ -44,7 +45,7 @@ export function Header() {
                   className="relative text-sm font-bold"
                 >
 
-                  {item.name}
+                  {t(item.key)}
 
                   {item.badge && (
                     <span className="ml-2 text-xs bg-primary text-black px-1 rounded">
@@ -80,10 +81,11 @@ export function Header() {
       </header>
       {mobileMenuOpen && (
 
-        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
+        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center min-h-dvh"
+          style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
 
           <Button
-            className="absolute top-6 right-6"
+            className="absolute top-6 right-6 min-h-[44px] min-w-[44px]"
             onClick={() => setMobileMenuOpen(false)}
           >
             <X />
@@ -96,9 +98,9 @@ export function Header() {
               key={item.name}
               href={item.href}
               onClick={() => setMobileMenuOpen(false)}
-              className="text-2xl py-4"
+              className="text-2xl py-4 min-h-[64px] flex items-center"
             >
-              {item.name}
+              {t(item.key)}
             </Link>
 
           ))}

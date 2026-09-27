@@ -14,12 +14,14 @@ import { MatchStatsBar } from "@/components/match";
 export default function MatchPage() {
   const params = useParams<{ id: string }>();
   const matchId = params.id;
-  const { getMatch } = useMockData();
+  const allPolls = useMockData((s) => s.polls);
+  const getMatch = useMockData((s) => s.getMatch);
 
   const match = getMatch(matchId);
-
-  // Fetch polls via the data layer (with polling + caching)
-  const { data: polls = [], isLoading, isRefetching } = usePollList(matchId);
+  const polls = useMemo(
+    () => allPolls.filter((p) => p.matchId === matchId),
+    [allPolls, matchId],
+  );
 
   // Aggregate stats
   const totalPool = useMemo(
@@ -88,7 +90,13 @@ export default function MatchPage() {
               Choose a poll and stake on the outcome you believe will happen
             </p>
           </div>
-          <CreatePollButton matchId={params.id} />
+          {/* Only show the create-poll CTA for upcoming matches — creating a
+              market for a live or completed game makes no sense and the modal's
+              own match dropdown (upcoming-only) would leave the pre-filled ID
+              unresolvable. */}
+          {match.status === "upcoming" && (
+            <CreatePollButton matchId={params.id} />
+          )}
         </div>
 
         {isLoading ? (

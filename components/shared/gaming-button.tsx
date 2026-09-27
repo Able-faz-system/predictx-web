@@ -4,6 +4,7 @@ import { useState, useRef, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface GamingButtonProps {
   variant?: "primary" | "success" | "danger" | "gold" | "ghost";
@@ -11,6 +12,8 @@ interface GamingButtonProps {
   loading?: boolean;
   disabled?: boolean;
   onClick?: () => void;
+  /** When provided the button renders as a Next.js <Link> pointing to this URL. */
+  href?: string;
   children: ReactNode;
   className?: string;
   type?: "button" | "submit" | "reset";
@@ -61,7 +64,8 @@ interface RippleState {
   id: number;
 }
 
-export function GamingButton({
+/** Shared visual shell used by both the button and link variants. */
+function GamingButtonShell({
   variant = "primary",
   size = "md",
   loading = false,
@@ -70,7 +74,8 @@ export function GamingButton({
   children,
   className,
   type = "button",
-}: GamingButtonProps) {
+  asLink = false,
+}: GamingButtonProps & { asLink?: boolean }) {
   const [ripples, setRipples] = useState<RippleState[]>([]);
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
@@ -101,53 +106,51 @@ export function GamingButton({
 
   const isDisabled = disabled || loading;
 
-  return (
-    <motion.button
-      ref={buttonRef}
-      type={type}
-      disabled={isDisabled}
-      className={cn(
-        "relative overflow-hidden font-medium tracking-wider uppercase",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-        "disabled:opacity-50 disabled:cursor-not-allowed disabled:no-glow",
-        sizeClasses[size],
-        className
-      )}
-      style={{
-        clipPath:
-          "polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px)",
-        background: styles.bg,
-        border: `1px solid ${styles.border}`,
-        boxShadow: isDisabled
-          ? "none"
-          : isHovered
-          ? `0 0 30px ${styles.glow}, inset 0 0 20px ${styles.glow}30`
-          : `0 0 15px ${styles.glow}50, inset 0 0 10px ${styles.glow}20`,
-        color: styles.text,
-        textShadow: isHovered
-          ? `0 0 10px ${styles.glow}, 0 0 20px ${styles.glow}`
-          : `0 0 5px ${styles.glow}`,
-      }}
-      onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setIsPressed(false);
-      }}
-      onMouseDown={() => setIsPressed(true)}
-      onMouseUp={() => setIsPressed(false)}
-      whileHover={!isDisabled ? { scale: 1.05, rotate: 1 } : {}}
-      whileTap={!isDisabled ? { scale: 0.95 } : {}}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-    >
+  const sharedClassName = cn(
+    "relative overflow-hidden font-medium tracking-wider uppercase",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "disabled:opacity-50 disabled:cursor-not-allowed disabled:no-glow",
+    sizeClasses[size],
+    className,
+  );
+
+  const sharedStyle = {
+    clipPath:
+      "polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px)",
+    background: styles.bg,
+    border: `1px solid ${styles.border}`,
+    boxShadow: isDisabled
+      ? "none"
+      : isHovered
+        ? `0 0 30px ${styles.glow}, inset 0 0 20px ${styles.glow}30`
+        : `0 0 15px ${styles.glow}50, inset 0 0 10px ${styles.glow}20`,
+    color: styles.text,
+    textShadow: isHovered
+      ? `0 0 10px ${styles.glow}, 0 0 20px ${styles.glow}`
+      : `0 0 5px ${styles.glow}`,
+  };
+
+  const sharedMotionProps = {
+    onMouseEnter: () => setIsHovered(true),
+    onMouseLeave: () => {
+      setIsHovered(false);
+      setIsPressed(false);
+    },
+    onMouseDown: () => setIsPressed(true),
+    onMouseUp: () => setIsPressed(false),
+    whileHover: !isDisabled ? { scale: 1.05, rotate: 1 } : {},
+    whileTap: !isDisabled ? { scale: 0.95 } : {},
+    transition: { type: "spring" as const, stiffness: 400, damping: 25 },
+  };
+
+  const innerContent = (
+    <>
       {/* Animated background gradient sweep */}
       <motion.div
         className="absolute inset-0 pointer-events-none"
         animate={
           !isDisabled
-            ? {
-                backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-              }
+            ? { backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }
             : {}
         }
         transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
@@ -233,6 +236,52 @@ export function GamingButton({
           </motion.div>
         )}
       </AnimatePresence>
+    </>
+  );
+
+  // When rendered as a link we use a motion.div wrapper around the Next Link
+  // so we keep identical visual behaviour while delegating navigation to Link.
+  if (asLink) {
+    return (
+      <motion.div
+        className={sharedClassName}
+        style={sharedStyle}
+        {...sharedMotionProps}
+      >
+        {innerContent}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.button
+      ref={buttonRef}
+      type={type}
+      disabled={isDisabled}
+      className={sharedClassName}
+      style={sharedStyle}
+      onClick={handleClick}
+      {...sharedMotionProps}
+    >
+      {innerContent}
     </motion.button>
   );
+}
+
+export function GamingButton({
+  href,
+  onClick,
+  ...rest
+}: GamingButtonProps) {
+  if (href) {
+    return (
+      <Link href={href} tabIndex={-1} style={{ display: "inline-block" }}>
+        <GamingButtonShell asLink {...rest}>
+          {rest.children}
+        </GamingButtonShell>
+      </Link>
+    );
+  }
+
+  return <GamingButtonShell onClick={onClick} {...rest} />;
 }

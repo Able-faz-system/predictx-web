@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     X,
@@ -20,11 +20,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MATCHES, type Poll, type PollCategory, type LockTime } from "@/lib/mock-data";
+import { POLL_QUESTION_MIN_LENGTH, POLL_QUESTION_MAX_LENGTH } from "@/lib/constants";
 import { useMockData } from "@/hooks/use-mock-data";
 import { useWallet } from "@/hooks/use-wallet";
 import { WalletConnectModal } from "@/components/wallet-connect-modal";
 import { GamingButton } from "@/components/shared/gaming-button";
 import { cn } from "@/lib/utils";
+import { CREATE_POLL_FEE_XLM } from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,8 +47,6 @@ interface FormState {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STEPS = ["Match", "Category", "Question", "Lock Time"] as const;
-const QUESTION_MAX = 120;
-const QUESTION_MIN = 10;
 
 const CATEGORY_OPTIONS: Array<{
     value: PollCategory;
@@ -263,16 +263,36 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
 
+    // Track the success auto-close timer so we can cancel it on unmount
+    const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Clear the timer when the modal unmounts to prevent state updates on
+    // an unmounted component (e.g. parent destroys modal from outside)
+    useEffect(() => {
+        return () => {
+            if (successTimerRef.current) clearTimeout(successTimerRef.current);
+        };
+    }, []);
+
     const upcomingMatches = MATCHES.filter((m) => m.status === "upcoming");
     const selectedMatch = MATCHES.find((m) => m.id === form.matchId);
-    const matchLabel = selectedMatch ? `${selectedMatch.homeTeam} vs ${selectedMatch.awayTeam}` : "";
+    // If a preselected match is not upcoming (live/completed), ignore it so
+    // the wizard never receives a matchId that bypasses the upcoming-only filter.
+    const effectiveMatchId =
+        selectedMatch && selectedMatch.status !== "upcoming" ? "" : form.matchId;
+    const resolvedMatch = effectiveMatchId
+        ? MATCHES.find((m) => m.id === effectiveMatchId)
+        : undefined;
+    const matchLabel = resolvedMatch
+        ? `${resolvedMatch.homeTeam} vs ${resolvedMatch.awayTeam}`
+        : "";
 
     // ── Validation ─────────────────────────────────────────────────────────────
 
     const canGoNext = useCallback(() => {
         if (step === 1) return !!form.matchId;
         if (step === 2) return !!form.category;
-        if (step === 3) return form.question.length >= QUESTION_MIN && form.question.length <= QUESTION_MAX;
+        if (step === 3) return form.question.length >= POLL_QUESTION_MIN_LENGTH && form.question.length <= POLL_QUESTION_MAX_LENGTH;
         if (step === 4) return !!form.lockTime && (form.lockTime !== "custom" || !!form.customLockTime);
         return false;
     }, [step, form]);
@@ -289,13 +309,13 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
             setShowWalletModal(true);
             return;
         }
-        if (!selectedMatch || !form.category || !form.lockTime) return;
+        if (!resolvedMatch || !form.category || !form.lockTime) return;
 
         setSubmitting(true);
         setSubmitError("");
 
         try {
-            await sendTransaction(0, `Create poll: ${form.question}`);
+            await sendTransaction(CREATE_POLL_FEE_XLM, `Create poll: ${form.question}`);
 
             const newPoll: Poll = {
                 id: generatePollId(),
@@ -305,6 +325,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 yesPool: 0,
                 noPool: 0,
                 participants: 0,
+                stakeCount: 0,
+                stakers: [],
                 status: "active",
                 lockTime: (form.lockTime === "custom" ? "kickoff" : form.lockTime) as LockTime,
                 recentActivity: "Just created",
@@ -321,7 +343,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 description: "Your prediction has been created!",
             });
 
-            setTimeout(() => {
+            successTimerRef.current = setTimeout(() => {
+                successTimerRef.current = null;
                 setSuccess(false);
                 handleClose();
             }, 2000);
@@ -337,6 +360,13 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     // ── Close / reset ──────────────────────────────────────────────────────────
 
     const handleClose = () => {
+        // Block close while a transaction is in flight — prevents unmounting
+        // the modal mid-transaction and the duplicate-submission bug it causes.
+        if (submitting) return;
+        if (successTimerRef.current) {
+            clearTimeout(successTimerRef.current);
+            successTimerRef.current = null;
+        }
         setStep(1);
         setForm({ matchId: preselectedMatchId ?? "", category: "", question: "", lockTime: "", customLockTime: "" });
         setSubmitting(false);
@@ -350,7 +380,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     // ── Render ────────────────────────────────────────────────────────────────
 
     const charCount = form.question.length;
-    const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= QUESTION_MIN ? "text-primary" : "text-muted-foreground";
+    const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= POLL_QUESTION_MIN_LENGTH ? "text-primary" : "text-muted-foreground";
     const lockDisplay = selectedMatch ? getLockDisplay(form.lockTime, form.customLockTime, selectedMatch.kickoff) : "—";
     const showLivePreview = step >= 3;
 
@@ -362,11 +392,12 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 onClick={handleClose}
                 style={{
                     backgroundImage: "radial-gradient(circle at 50% 50%, rgba(0,217,255,0.03) 0%, transparent 70%)",
+                    cursor: submitting ? "not-allowed" : "default",
                 }}
             />
 
             {/* Modal */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.92, y: 32 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -374,10 +405,11 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                     transition={{ type: "spring", stiffness: 300, damping: 28 }}
                     className={cn(
                         "pointer-events-auto bg-[#0d1025] border border-primary/30 shadow-[0_0_60px_rgba(0,217,255,0.12)]",
-                        "w-full max-h-[90vh] overflow-hidden flex flex-col",
-                        "sm:rounded-xl",
+                        "w-full flex flex-col",
+                        "h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:overflow-hidden",
+                        "sm:rounded-xl rounded-none",
                         // Desktop with preview: wider
-                        showLivePreview ? "max-w-4xl" : "max-w-xl"
+                        showLivePreview ? "sm:max-w-4xl" : "sm:max-w-xl"
                     )}
                     style={{
                         clipPath: "polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)",
@@ -394,7 +426,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                         </div>
                         <button
                             onClick={handleClose}
-                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-sm hover:bg-white/5"
+                            disabled={submitting}
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-sm hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <X className="h-5 w-5" />
                         </button>
@@ -533,25 +566,25 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                             <div className="relative">
                                                 <textarea
                                                     value={form.question}
-                                                    onChange={(e) => updateForm({ question: e.target.value.slice(0, QUESTION_MAX) })}
+                                                    onChange={(e) => updateForm({ question: e.target.value.slice(0, POLL_QUESTION_MAX_LENGTH) })}
                                                     placeholder="e.g., Will Palmer score a goal?"
                                                     rows={3}
                                                     className={cn(
                                                         "w-full bg-[#1a1f3a]/80 text-foreground placeholder:text-muted-foreground",
                                                         "p-4 rounded-lg border-2 resize-none outline-none transition-all font-medium",
                                                         "focus:border-primary focus:shadow-[0_0_20px_rgba(0,217,255,0.3)]",
-                                                        charCount > QUESTION_MAX ? "border-[#ff006e]" : "border-border"
+                                                        charCount > POLL_QUESTION_MAX_LENGTH ? "border-[#ff006e]" : "border-border"
                                                     )}
                                                     style={{ caretColor: "#00d9ff" }}
                                                 />
                                                 <span className={cn("absolute bottom-3 right-3 text-xs font-mono", charColor)}>
-                                                    {charCount}/{QUESTION_MAX}
+                                                    {charCount}/{POLL_QUESTION_MAX_LENGTH}
                                                 </span>
                                             </div>
 
-                                            {charCount < QUESTION_MIN && charCount > 0 && (
+                                            {charCount < POLL_QUESTION_MIN_LENGTH && charCount > 0 && (
                                                 <p className="text-xs text-[#ff006e] flex items-center gap-1">
-                                                    <AlertCircle className="h-3 w-3" /> Minimum {QUESTION_MIN} characters
+                                                    <AlertCircle className="h-3 w-3" /> Minimum {POLL_QUESTION_MIN_LENGTH} characters
                                                 </p>
                                             )}
 
@@ -659,7 +692,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                                             type="datetime-local"
                                                             value={form.customLockTime}
                                                             onChange={(e) => updateForm({ customLockTime: e.target.value })}
-                                                            max={selectedMatch ? new Date(new Date(selectedMatch.kickoff).getTime() + 105 * 60000).toISOString().slice(0, 16) : undefined}
+                                                            max={resolvedMatch ? new Date(new Date(resolvedMatch.kickoff).getTime() + 105 * 60000).toISOString().slice(0, 16) : undefined}
                                                             className="w-full bg-[#1a1f3a]/80 text-foreground border-2 border-border rounded-lg p-3 outline-none focus:border-primary transition-all text-sm"
                                                         />
                                                     </motion.div>
@@ -675,7 +708,7 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                                             {/* Fee notice */}
                                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                                                 <AlertCircle className="h-3 w-3" />
-                                                Creating a poll costs approximately 0.001 XLM in network fees
+                                                Creating a poll costs {CREATE_POLL_FEE_XLM} XLM in network fees
                                             </p>
 
                                             {/* Error */}

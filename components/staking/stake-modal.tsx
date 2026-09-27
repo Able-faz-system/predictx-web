@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useReducer, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -13,19 +13,23 @@ import {
   ExternalLink,
   AlertTriangle,
   Zap,
+  Lock,
   Shield,
   ChevronRight,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
 
-import { cn } from "@/lib/utils";
+import { cn, categoryLabel } from "@/lib/utils";
 import {
   calculatePotentialWinnings,
   calculatePoolPercentages,
   formatCurrency,
   formatAddress,
   formatXLM,
+  getLockTargetISO,
+  isPollLocked as computePollLocked,
+  msUntilLock,
 } from "@/lib/calculations";
 import {
   PLATFORM_FEE_PERCENTAGE,
@@ -37,6 +41,7 @@ import {
   STELLAR_BASE_FEE,
 } from "@/lib/constants";
 import type { Poll, Match, Stake } from "@/lib/mock-data";
+import { lockTimeLabel } from "@/lib/mock-data";
 
 import { useWallet, type TransactionReceipt } from "@/hooks/use-wallet";
 import { useStaking } from "@/hooks/use-staking";
@@ -55,6 +60,27 @@ import {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 type TxStep = "idle" | "confirm" | "processing" | "success" | "failure";
+
+/**
+ * Render a remaining duration compactly: `2d 4h`, `3h 12m`, or `45s`.
+ *
+ * Deliberately local rather than reusing `CompactCountdown`, which renders an
+ * SVG-free chip inside `PollCard` and is not exported. Both read from the same
+ * `msUntilLock` helper, so the number shown here and the number the card locks
+ * on cannot disagree.
+ */
+function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0s";
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 
 interface StakeModalProps {
   poll: Poll;
@@ -79,11 +105,18 @@ function WalletConfirmPopup({
   amount,
   onConfirm,
   onReject,
+  confirming = false,
 }: {
   from: string;
   amount: number;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onReject: () => void;
+  /**
+   * True once the confirmation has been submitted. Drives the button's
+   * `loading` state so `GamingButton`'s own guard
+   * (`if (disabled || loading) return`) stops the second click.
+   */
+  confirming?: boolean;
 }) {
   const amountXLM = amount / XLM_USD_RATE;
 
@@ -138,12 +171,17 @@ function WalletConfirmPopup({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <GamingButton variant="danger" size="md" onClick={onReject}>
+            <div className="grid grid-cols-2 gap-2">
+              <GamingButton variant="danger" size="md" onClick={onReject} disabled={confirming}>
                 Reject
               </GamingButton>
-              <GamingButton variant="success" size="md" onClick={onConfirm}>
-                Confirm
+              <GamingButton
+                variant="success"
+                size="md"
+                onClick={onConfirm}
+                loading={confirming}
+              >
+                {confirming ? "Confirming…" : "Confirm"}
               </GamingButton>
             </div>
           </div>
@@ -235,10 +273,18 @@ function SuccessOverlay({
 }) {
   const [copied, setCopied] = useState(false);
 
-  const copyHash = () => {
-    navigator.clipboard.writeText(receipt.hash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyHash = async () => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard not available in this context");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(receipt.hash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy transaction hash");
+    }
   };
 
   // Auto-close after 5s
@@ -432,6 +478,27 @@ export function StakeModal({
   const [hasStaked, setHasStaked] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * In-flight guard for the wallet-confirm step.
+   *
+   * The confirm popup lives inside `<AnimatePresence mode="wait">`, so it stays
+   * mounted for the whole exit transition — long enough for a second click to
+   * land while `sendTransaction` is still awaiting its 1-2s latency. Without
+   * this, two clicks call `placeStake` twice: two balance debits, two
+   * `updatePollPool` additions, two `Stake` rows from one confirmation.
+   *
+   * A ref rather than state on purpose: the button is also given `loading`,
+   * but that state only lands on the next render, whereas two clicks within
+   * the same frame would both observe `isSubmitting === false`. The ref is
+   * synchronous, so the second call is rejected immediately.
+   *
+   * `confirming` state exists alongside it purely for rendering. The ref
+   * guards, the state paints; they are set in the same two places and are not
+   * redundant, because only one of them is readable before the next render.
+   */
+  const isSubmittingRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+
   // ── Hooks ──────────────────────────────────────────────────────────────
 
   const { isConnected, address, balance } = useWallet();
@@ -467,7 +534,42 @@ export function StakeModal({
     (side === "yes" && poolPct.yes >= 50) ||
     (side === "no" && poolPct.no >= 50);
 
-  const isPollLocked = poll.status !== "active";
+  /**
+   * The match this poll belongs to, resolved from `matchId`.
+   *
+   * The modal receives `matchId` and `matchName` as plain strings rather than
+   * the match object, so the kickoff needed for a clock-based lock check has to
+   * be looked up. Read imperatively rather than through a hook subscription:
+   * the match's kickoff never changes at runtime, and subscribing would
+   * re-render the whole modal on every unrelated mock-data write.
+   */
+  const match = useMockData.getState().getMatch(matchId);
+
+  /**
+   * Lock state, shared with `PollCard` via `computePollLocked`.
+   *
+   * Previously this was `poll.status !== "active"` alone. Because nothing ever
+   * transitions `poll.status` when a lock time passes, a poll whose countdown
+   * had expired could still be confirmed from an already-open modal — the
+   * sticky footer checked `canSubmit`, which consulted this status-only value.
+   * Now it also asks the clock.
+   */
+  const isPollLocked = computePollLocked(poll, match);
+
+  /**
+   * Ticks once a second so an open modal locks itself when the deadline passes
+   * while the user is filling it in, instead of staying submittable until they
+   * happen to re-render for another reason.
+   */
+  const [, forceTick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const id = setInterval(forceTick, 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  /** Live countdown target, so the modal can show how long is left. */
+  const lockTargetISO = match ? getLockTargetISO(match.kickoff, poll.lockTime) : null;
+  const msRemaining = match ? msUntilLock(poll, match) : 0;
 
   // ── Validation ─────────────────────────────────────────────────────────
 
@@ -538,6 +640,13 @@ export function StakeModal({
   }, [canSubmit]);
 
   const handleWalletConfirm = useCallback(async () => {
+    // Synchronous re-entrancy check. A state-based `disabled` prop cannot close
+    // this window on its own, because React has not re-rendered between two
+    // clicks in the same tick.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setConfirming(true);
+
     setTxStep("processing");
 
     try {
@@ -560,6 +669,12 @@ export function StakeModal({
       setErrorMsg(err?.message ?? "Unknown error");
       setTxStep("failure");
       toast.error("Transaction failed", { description: err?.message });
+    } finally {
+      // Released on both paths: a failure puts the modal in the `failure` step
+      // where Retry is offered, and that retry must not be swallowed by a
+      // latch left set from the first attempt.
+      isSubmittingRef.current = false;
+      setConfirming(false);
     }
   }, [placeStake, poll, matchId, matchName, side, stakeAmount]);
 
@@ -698,7 +813,7 @@ export function StakeModal({
                   )}
 
                   <span className="inline-block px-2.5 py-1 rounded text-xs font-bold uppercase tracking-widest bg-[var(--accent-cyan)]/15 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/20">
-                    {poll.category.replace("_", " ")}
+                    {categoryLabel(poll.category)}
                   </span>
 
                   <h2 className="font-display text-2xl md:text-3xl font-black text-foreground leading-tight">
@@ -714,10 +829,20 @@ export function StakeModal({
                       <Users className="w-3.5 h-3.5" />
                       {poll.participants} stakers
                     </span>
-                    {poll.status === "active" && (
+                    {isPollLocked ? (
+                      <span className="flex items-center gap-1.5 text-[var(--muted-foreground)]">
+                        <Lock className="w-3.5 h-3.5" />
+                        Locked at {poll.lockTime}
+                      </span>
+                    ) : (
                       <span className="flex items-center gap-1.5 text-[var(--accent-cyan)]">
                         <Zap className="w-3.5 h-3.5" />
-                        Locks at {poll.lockTime}
+                        Locks at {lockTimeLabel(poll.lockTime)}
+                        {lockTargetISO && (
+                          <span className="font-mono text-[var(--muted-foreground)]">
+                            ({formatCountdown(msRemaining)} left)
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -1064,13 +1189,15 @@ export function StakeModal({
                     </div>
 
                     <div className="flex-1 space-y-2 text-xs font-mono">
+                      {/* Legend rows show the base pool values so that
+                          Yes + No + Your Stake = Total (no double-count). */}
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-sm bg-[#00d9ff]" />
                         <span className="text-[var(--muted-foreground)]">
                           Yes Pool
                         </span>
                         <span className="ml-auto text-foreground">
-                          {formatCurrency(previewYes)} ({previewPct.yes}%)
+                          {formatCurrency(poll.yesPool)} ({previewPct.yes}%)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1079,7 +1206,7 @@ export function StakeModal({
                           No Pool
                         </span>
                         <span className="ml-auto text-foreground">
-                          {formatCurrency(previewNo)} ({previewPct.no}%)
+                          {formatCurrency(poll.noPool)} ({previewPct.no}%)
                         </span>
                       </div>
                       {stakeAmount > 0 && (
@@ -1189,6 +1316,7 @@ export function StakeModal({
                   amount={stakeAmount}
                   onConfirm={handleWalletConfirm}
                   onReject={handleWalletReject}
+                  confirming={confirming}
                 />
               )}
               {txStep === "processing" && (

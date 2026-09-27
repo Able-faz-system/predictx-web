@@ -42,7 +42,7 @@ export function Hero() {
         <div className="particle particle-3" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 py-24 sm:py-32 lg:px-8">
+      <div className="relative mx-auto max-w-7xl px-4 py-16 sm:py-24 sm:py-32 lg:px-8">
         <div className="text-center">
           {/* Energy badge */}
           <motion.div

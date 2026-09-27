@@ -1,3 +1,4 @@
+import { calculateCompletedPayout } from "@/lib/calculations";
 // All dates are computed relative to new Date() — no hardcoded past/future dates.
 
 const addDays = (n: number, hour = 15): string => {
@@ -7,7 +8,7 @@ const addDays = (n: number, hour = 15): string => {
   return d.toISOString();
 };
 
-export const XLM_RATE = 0.12; // 1 XLM ≈ $0.12
+import { XLM_USD_RATE } from "@/lib/constants";
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 export const STORAGE_KEYS = {
@@ -15,11 +16,13 @@ export const STORAGE_KEYS = {
   stakes: "predictx_stakes",
   votes: "predictx_votes",
   pools: "predictx_pools",
+  transactions: "predictx_transactions",
 };
 
 export function resetAllData() {
   if (typeof window === "undefined") return;
   Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+  localStorage.removeItem("wallet-storage");
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -32,6 +35,41 @@ export type PollCategory =
   | "score_prediction"
   | "other";
 export type WalletProvider = "Freighter" | "Lobstr" | "xBull";
+
+/**
+ * Returns a human-readable label for a poll's lock time.
+ *
+ * - `"kickoff"`  → "At Kick-off"
+ * - `"halftime"` → "At Half-Time (45')"
+ * - `"60min"`    → "At 60th Minute"
+ * - ISO datetime → localised date/time string (custom lock)
+ *
+ * Use this everywhere a lock time is shown to the user so that
+ * raw enum values ("kickoff", "halftime", "60min") never appear as UI copy.
+ */
+export function lockTimeLabel(lockTime: LockTime | string): string {
+  switch (lockTime) {
+    case "kickoff":
+      return "At Kick-off";
+    case "halftime":
+      return "At Half-Time (45')";
+    case "60min":
+      return "At 60th Minute";
+    default: {
+      // Treat unrecognised values as ISO datetime strings (custom lock)
+      const d = new Date(lockTime);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return lockTime;
+    }
+  }
+}
 
 export interface Match {
   id: string;
@@ -50,7 +88,12 @@ export interface Poll {
   category: PollCategory;
   yesPool: number;
   noPool: number;
+  /** Number of distinct wallet addresses that have staked on this poll. */
   participants: number;
+  /** Total number of stake transactions placed on this poll (may exceed `participants`). */
+  stakeCount: number;
+  /** Wallet addresses of every distinct staker; used to compute `participants`. */
+  stakers: string[];
   status: PollStatus;
   lockTime: LockTime;
   recentActivity: string;
@@ -66,6 +109,8 @@ export interface Stake {
   side: "yes" | "no";
   amount: number;
   status: "active" | "pending_resolution" | "completed";
+  /** Stellar public key of the wallet that placed this stake. */
+  wallet: string;
   outcome?: "won" | "lost";
   profit?: number;
   roi?: number;
@@ -98,6 +143,18 @@ export interface PlatformStats {
   activePredictions: number;
   communityMembers: number;
   totalPayouts: number;
+}
+
+export interface MatchEventTimelineItem {
+  time: string;
+  event: string;
+}
+
+export interface MatchEvidence {
+  matchId: string;
+  timeline: MatchEventTimelineItem[];
+  highlightsUrl?: string;
+  statsUrl?: string;
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
@@ -168,6 +225,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "34 people staked Yes in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m1-p2",
@@ -180,6 +239,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "halftime",
     recentActivity: "Pool grew $800 in last 2 hours",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m1-p3",
@@ -192,6 +253,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "12 people staked No in last 30min",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m1-p4",
@@ -204,6 +267,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "60min",
     recentActivity: "Pool grew $1,200 in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // m2 — Arsenal vs Liverpool
@@ -218,6 +283,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "28 people staked Yes in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m2-p2",
@@ -230,6 +297,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "Pool grew $2,000 in 30min",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m2-p3",
@@ -242,6 +311,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "halftime",
     recentActivity: "19 people staked Yes in last 2 hours",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m2-p4",
@@ -254,6 +325,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "Pool grew $600 in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m2-p5",
@@ -266,6 +339,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "60min",
     recentActivity: "41 people staked Yes in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // m3 — Manchester City vs Tottenham
@@ -280,6 +355,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "Pool grew $400 in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m3-p2",
@@ -292,6 +369,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "52 people staked Yes in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m3-p3",
@@ -304,6 +383,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "Pool grew $1,500 in last 2 hours",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m3-p4",
@@ -316,6 +397,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "halftime",
     recentActivity: "22 people staked Yes in last 30min",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // m4 — Newcastle vs Aston Villa
@@ -330,6 +413,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "Pool grew $300 in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m4-p2",
@@ -342,6 +427,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "17 people staked Yes in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m4-p3",
@@ -354,6 +441,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "halftime",
     recentActivity: "Pool grew $900 in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m4-p4",
@@ -366,6 +455,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "60min",
     recentActivity: "Pool grew $700 in last 2 hours",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m4-p5",
@@ -378,6 +469,8 @@ export const POLLS: Poll[] = [
     status: "active",
     lockTime: "kickoff",
     recentActivity: "25 people staked No in last hour",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // m5 — Brighton vs West Ham (live match — polls locked/resolved)
@@ -391,8 +484,9 @@ export const POLLS: Poll[] = [
     participants: 74,
     status: "resolved",
     lockTime: "kickoff",
-    recentActivity: "Resolved — YES won",
-    outcome: "yes" as const,
+    recentActivity: "61 people staked Yes before kickoff",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m5-p2",
@@ -404,8 +498,9 @@ export const POLLS: Poll[] = [
     participants: 55,
     status: "resolved",
     lockTime: "halftime",
-    recentActivity: "Resolved — NO won",
-    outcome: "no" as const,
+    recentActivity: "Pool reached $10K before halftime",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m5-p3",
@@ -417,7 +512,9 @@ export const POLLS: Poll[] = [
     participants: 47,
     status: "locked",
     lockTime: "60min",
-    recentActivity: "Poll locked — awaiting resolution",
+    recentActivity: "Pool grew $1,800 before 60min",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m5-p4",
@@ -429,20 +526,9 @@ export const POLLS: Poll[] = [
     participants: 60,
     status: "locked",
     lockTime: "halftime",
-    recentActivity: "Poll locked — awaiting resolution",
-  },
-  // Cancelled example on m5
-  {
-    id: "m5-p5",
-    matchId: "m5",
-    question: "Will the referee be changed at halftime?",
-    category: "other",
-    yesPool: 500,
-    noPool: 300,
-    participants: 12,
-    status: "cancelled",
-    lockTime: "halftime",
-    recentActivity: "Cancelled — emergency refund issued",
+    recentActivity: "43 people staked No before halftime",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // m6 — Everton vs Wolves (completed match — polls in voting/resolved)
@@ -456,8 +542,9 @@ export const POLLS: Poll[] = [
     participants: 71,
     status: "resolved",
     lockTime: "kickoff",
-    recentActivity: "Resolved — YES won",
-    outcome: "yes" as const,
+    recentActivity: "Voting in progress — 2 hours remaining",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m6-p2",
@@ -469,8 +556,9 @@ export const POLLS: Poll[] = [
     participants: 64,
     status: "resolved",
     lockTime: "halftime",
-    recentActivity: "Resolved — YES won",
-    outcome: "yes" as const,
+    recentActivity: "Voting in progress",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m6-p3",
@@ -483,6 +571,8 @@ export const POLLS: Poll[] = [
     status: "voting",
     lockTime: "kickoff",
     recentActivity: "Voting in progress — cast your vote now",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m6-p4",
@@ -495,6 +585,8 @@ export const POLLS: Poll[] = [
     status: "voting",
     lockTime: "halftime",
     recentActivity: "Voting in progress",
+    stakeCount: 0,
+    stakers: [],
   },
   {
     id: "m6-p5",
@@ -507,6 +599,8 @@ export const POLLS: Poll[] = [
     status: "voting",
     lockTime: "60min",
     recentActivity: "Admin review in progress",
+    stakeCount: 0,
+    stakers: [],
   },
 
   // Additional resolved polls (for m4 completed stakes)
@@ -538,17 +632,125 @@ export const POLLS: Poll[] = [
   },
 ];
 
+// ── Match Evidence ────────────────────────────────────────────────────────────
+export const MATCH_EVIDENCE: Record<string, MatchEvidence> = {
+  m1: {
+    matchId: "m1",
+    timeline: [
+      { time: "0'", event: "Match starts — Chelsea vs Manchester United" },
+      { time: "12'", event: "Yellow Card — Shaw (MAN)" },
+      { time: "18'", event: "⚽ Goal! Cole Palmer (CHE) — Assists: Caicedo" },
+      { time: "31'", event: "Yellow Card — Dalot (MAN)" },
+      { time: "45+2'", event: "Half Time: Chelsea 1 - 0 Manchester United" },
+      { time: "52'", event: "⚽ Goal! Bruno Fernandes (MAN) — Free kick" },
+      { time: "68'", event: "Yellow Card — James (CHE)" },
+      { time: "71'", event: "Substitution — Mainoo replaces McTominay" },
+      { time: "85'", event: "⚽ Goal! Jackson (CHE)" },
+      { time: "90+4'", event: "Full Time: Chelsea 2 - 1 Manchester United" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Chelsea+vs+Manchester+United",
+    statsUrl: "https://www.premierleague.com/matches/Chelsea",
+  },
+  m2: {
+    matchId: "m2",
+    timeline: [
+      { time: "0'", event: "Match starts — Arsenal vs Liverpool" },
+      { time: "8'", event: "⚽ Goal! Saka (ARS) — Early breakthrough" },
+      { time: "24'", event: "Yellow Card — Van Dijk (LIV)" },
+      { time: "45'", event: "Half Time: Arsenal 1 - 0 Liverpool" },
+      { time: "56'", event: "⚽ Goal! Salah (LIV)" },
+      { time: "72'", event: "Yellow Card — Nketiah (ARS)" },
+      { time: "78'", event: "VAR Check: Potential handball — No penalty" },
+      { time: "81'", event: "⚽ Goal! Martinelli (ARS)" },
+      { time: "90+2'", event: "Yellow Card — Gravenberch (LIV)" },
+      { time: "90+5'", event: "Full Time: Arsenal 2 - 1 Liverpool" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Arsenal+vs+Liverpool",
+    statsUrl: "https://www.premierleague.com/matches/Arsenal",
+  },
+  m3: {
+    matchId: "m3",
+    timeline: [
+      { time: "0'", event: "Match starts — Manchester City vs Tottenham" },
+      { time: "5'", event: "⚽ Goal! Haaland (MAN) — Tap in" },
+      { time: "19'", event: "⚽ Goal! Foden (MAN)" },
+      { time: "38'", event: "Yellow Card — Romero (TOT)" },
+      { time: "45'", event: "Half Time: Manchester City 2 - 0 Tottenham" },
+      { time: "51'", event: "⚽ Goal! Richarlison (TOT)" },
+      { time: "62'", event: "⚽ Goal! Alvarez (MAN)" },
+      { time: "74'", event: "VAR Review: Potential foul — Play on" },
+      { time: "88'", event: "Yellow Card — Akanji (MAN)" },
+      { time: "90+3'", event: "Full Time: Manchester City 3 - 1 Tottenham" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Manchester+City+vs+Tottenham",
+    statsUrl: "https://www.premierleague.com/matches/Manchester+City",
+  },
+  m4: {
+    matchId: "m4",
+    timeline: [
+      { time: "0'", event: "Match starts — Newcastle vs Aston Villa" },
+      { time: "11'", event: "⚽ Goal! Isak (NEW)" },
+      { time: "28'", event: "Yellow Card — Cash (AVL)" },
+      { time: "35'", event: "⚽ Goal! Watkins (AVL)" },
+      { time: "45'", event: "Half Time: Newcastle 1 - 1 Aston Villa" },
+      { time: "57'", event: "⚽ Goal! Joelinton (NEW)" },
+      { time: "69'", event: "Yellow Card — Konsa (AVL)" },
+      { time: "76'", event: "VAR Check: Goal review — Allowed" },
+      { time: "82'", event: "Substitution — Mings replaces Konsa" },
+      { time: "90+2'", event: "Full Time: Newcastle 2 - 1 Aston Villa" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Newcastle+vs+Aston+Villa",
+    statsUrl: "https://www.premierleague.com/matches/Newcastle",
+  },
+  m5: {
+    matchId: "m5",
+    timeline: [
+      { time: "0'", event: "Match starts — Brighton vs West Ham (LIVE)" },
+      { time: "3'", event: "⚽ Goal! Mitoma (BRI)" },
+      { time: "14'", event: "Yellow Card — Fornals (WHU)" },
+      { time: "28'", event: "⚽ Goal! Kudus (WHU)" },
+      { time: "35'", event: "Yellow Card — Lewis Dunk (BRI)" },
+      { time: "45'", event: "Half Time: Brighton 1 - 1 West Ham" },
+      { time: "52'", event: "⚽ Goal! Ayew (WHU) — Assist: Soucek" },
+      { time: "NOW", event: "54' — Match in progress" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Brighton+vs+West+Ham",
+    statsUrl: "https://www.premierleague.com/matches/Brighton",
+  },
+  m6: {
+    matchId: "m6",
+    timeline: [
+      { time: "0'", event: "Match starts — Everton vs Wolves" },
+      { time: "12'", event: "⚽ Goal! Calvert-Lewin (EVE)" },
+      { time: "18'", event: "Yellow Card — Semedo (WOL)" },
+      { time: "32'", event: "⚽ Goal! Hwang Hee-chan (WOL)" },
+      { time: "45'", event: "Half Time: Everton 1 - 1 Wolves" },
+      { time: "58'", event: "⚽ Goal! McNeil (EVE)" },
+      { time: "71'", event: "Yellow Card — Lemina (WOL)" },
+      { time: "77'", event: "VAR Review: Handball check — No penalty" },
+      { time: "88'", event: "Yellow Card — Doherty (WOL)" },
+      { time: "90+5'", event: "Full Time: Everton 2 - 1 Wolves" },
+    ],
+    highlightsUrl: "https://www.youtube.com/results?search_query=Everton+vs+Wolves",
+    statsUrl: "https://www.premierleague.com/matches/Everton",
+  },
+};
+
 // ── Mock User ─────────────────────────────────────────────────────────────────
 export const MOCK_USER = {
   address: "GDKXJNLE2YQFPQZ5TK3VZRKPTMJ4OLR3QB7IU6FSCZ6KQF7H4V29F3H",
   displayAddress: "GDKX...9F3H",
   balanceUSD: 2500,
-  balanceXLM: 2500 / XLM_RATE, // ~20,833 XLM
+  balanceXLM: 2500 / XLM_USD_RATE, // ~20,833 XLM
 };
 
 export const MOCK_BADGES = ["Early Predictor", "3-Win Streak"];
 
 // ── Default stakes ────────────────────────────────────────────────────────────
+// The seeded wallet address matches MOCK_USER so that first-time users who
+// connect with the demo key see the sample history. New wallets start empty.
+const SEED_WALLET = "GDKXJNLE2YQFPQZ5TK3VZRKPTMJ4OLR3QB7IU6FSCZ6KQF7H4V29F3H";
+
 export const MOCK_STAKES: Stake[] = [
   // Active (3)
   {
@@ -560,6 +762,7 @@ export const MOCK_STAKES: Stake[] = [
     side: "yes",
     amount: 200,
     status: "active",
+    wallet: SEED_WALLET,
   },
   {
     id: "s2",
@@ -570,6 +773,7 @@ export const MOCK_STAKES: Stake[] = [
     side: "no",
     amount: 500,
     status: "active",
+    wallet: SEED_WALLET,
   },
   {
     id: "s3",
@@ -580,6 +784,7 @@ export const MOCK_STAKES: Stake[] = [
     side: "yes",
     amount: 150,
     status: "active",
+    wallet: SEED_WALLET,
   },
   // Pending resolution (2)
   {
@@ -592,6 +797,7 @@ export const MOCK_STAKES: Stake[] = [
     amount: 300,
     status: "pending_resolution",
     resolutionNote: "Voting in progress",
+    wallet: SEED_WALLET,
   },
   {
     id: "s5",
@@ -603,8 +809,9 @@ export const MOCK_STAKES: Stake[] = [
     amount: 180,
     status: "pending_resolution",
     resolutionNote: "Admin review",
+    wallet: SEED_WALLET,
   },
-  // Completed — 4 wins, 2 losses
+  // Completed — 4 wins, 2 losses (profit and roi computed via calculateCompletedPayout with 5% platform fee applied)
   {
     id: "s6",
     pollId: "m6-p1",
@@ -615,8 +822,9 @@ export const MOCK_STAKES: Stake[] = [
     amount: 100,
     status: "completed",
     outcome: "won",
-    profit: 50,
-    roi: 50.0,
+    profit: calculateCompletedPayout(100, 150).profit,
+    roi: calculateCompletedPayout(100, 150).roi,
+    wallet: SEED_WALLET,
   },
   {
     id: "s7",
@@ -628,8 +836,9 @@ export const MOCK_STAKES: Stake[] = [
     amount: 200,
     status: "completed",
     outcome: "won",
-    profit: 120,
-    roi: 60.0,
+    profit: calculateCompletedPayout(200, 320).profit,
+    roi: calculateCompletedPayout(200, 320).roi,
+    wallet: SEED_WALLET,
   },
   {
     id: "s8",
@@ -641,8 +850,9 @@ export const MOCK_STAKES: Stake[] = [
     amount: 250,
     status: "completed",
     outcome: "won",
-    profit: 187,
-    roi: 74.8,
+    profit: calculateCompletedPayout(250, 437).profit,
+    roi: calculateCompletedPayout(250, 437).roi,
+    wallet: SEED_WALLET,
   },
   {
     id: "s9",
@@ -654,8 +864,9 @@ export const MOCK_STAKES: Stake[] = [
     amount: 400,
     status: "completed",
     outcome: "won",
-    profit: 350,
-    roi: 87.5,
+    profit: calculateCompletedPayout(400, 750).profit,
+    roi: calculateCompletedPayout(400, 750).roi,
+    wallet: SEED_WALLET,
   },
   {
     id: "s10",
@@ -669,6 +880,7 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "lost",
     profit: -100,
     roi: -100.0,
+    wallet: SEED_WALLET,
   },
   {
     id: "s11",
@@ -682,42 +894,91 @@ export const MOCK_STAKES: Stake[] = [
     outcome: "lost",
     profit: -300,
     roi: -100.0,
+    wallet: SEED_WALLET,
   },
 ];
 
 // ── Voting opportunities ──────────────────────────────────────────────────────
+//
+// Rules kept consistent with use-voting.ts:
+//   • Every pollId MUST reference a poll whose status === "voting" so
+//     availablePolls() can surface it.
+//   • reward = (yesPool + noPool) * 0.005  — matches getVoteReward formula.
+//
+// Dev assertion (runs only in development builds):
+if (process.env.NODE_ENV === "development") {
+  // Resolved at module evaluation time — safe to run once on first import.
+  const _assertOpportunities = () => {
+    const votingPollIds = new Set(
+      POLLS.filter((p) => p.status === "voting").map((p) => p.id),
+    );
+
+    for (const opp of MOCK_VOTING_OPPORTUNITIES) {
+      const poll = POLLS.find((p) => p.id === opp.pollId);
+
+      if (!poll) {
+        console.warn(
+          `[MOCK] VotingOpportunity pollId "${opp.pollId}" has no matching poll.`,
+        );
+        continue;
+      }
+
+      if (!votingPollIds.has(opp.pollId)) {
+        console.warn(
+          `[MOCK] VotingOpportunity pollId "${opp.pollId}" has status "${poll.status}", not "voting".`,
+        );
+      }
+
+      const expectedReward = (poll.yesPool + poll.noPool) * 0.005;
+      if (Math.abs(opp.reward - expectedReward) > 0.01) {
+        console.warn(
+          `[MOCK] VotingOpportunity "${opp.pollId}" reward ${opp.reward} ≠ expected ${expectedReward}.`,
+        );
+      }
+    }
+  };
+
+  // Defer to avoid TDZ — POLLS and MOCK_VOTING_OPPORTUNITIES are defined
+  // in this same module but must both be initialised before we check them.
+  setTimeout(_assertOpportunities, 0);
+}
+
 export const MOCK_VOTING_OPPORTUNITIES: VotingOpportunity[] = [
   {
+    // m6-p1: (7200 + 4800) * 0.005 = 60
+    pollId: "m6-p1",
+    matchId: "m6",
+    matchName: "Everton vs Wolves",
+    question: "Will Everton win?",
+    reward: 60,
+    evidence: "Match in progress — vote on the final result",
+  },
+  {
+    // m6-p2: (5400 + 5600) * 0.005 = 55
+    pollId: "m6-p2",
+    matchId: "m6",
+    matchName: "Everton vs Wolves",
+    question: "Will total goals be over 2.5?",
+    reward: 55,
+    evidence: "Full-time — 2 goals scored in total",
+  },
+  {
+    // m6-p3: (1800 + 9200) * 0.005 = 55
     pollId: "m6-p3",
     matchId: "m6",
     matchName: "Everton vs Wolves",
     question: "Will there be a red card?",
-    reward: 12,
+    reward: 55,
     evidence: "Match ended without red cards per official report",
   },
   {
+    // m6-p5: (4300 + 6700) * 0.005 = 55
     pollId: "m6-p5",
     matchId: "m6",
     matchName: "Everton vs Wolves",
     question: "Will there be a VAR review?",
-    reward: 8,
+    reward: 55,
     evidence: "VAR used to review handball in 74th minute",
-  },
-  {
-    pollId: "m5-p3",
-    matchId: "m5",
-    matchName: "Brighton vs West Ham",
-    question: "Will there be a VAR review?",
-    reward: 25,
-    evidence: "Live — VAR review pending from 52nd min incident",
-  },
-  {
-    pollId: "m5-p4",
-    matchId: "m5",
-    matchName: "Brighton vs West Ham",
-    question: "Will both teams score?",
-    reward: 18,
-    evidence: "Brighton lead 1–0 at half; West Ham yet to score",
   },
 ];
 
@@ -735,7 +996,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
     type: "stake",
     amount: 200,
-    amountXLM: 200 / XLM_RATE,
+    amountXLM: 200 / XLM_USD_RATE,
     description: 'Staked $200 on "Will Palmer score?" – YES',
     timestamp: addDays(-3, 10),
     ledger: 50_123_456,
@@ -746,7 +1007,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "b4e5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5",
     type: "stake",
     amount: 500,
-    amountXLM: 500 / XLM_RATE,
+    amountXLM: 500 / XLM_USD_RATE,
     description: 'Staked $500 on "Will Arsenal keep a clean sheet?" – NO',
     timestamp: addDays(-3, 11),
     ledger: 50_123_789,
@@ -757,7 +1018,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "c5f6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
     type: "stake",
     amount: 150,
-    amountXLM: 150 / XLM_RATE,
+    amountXLM: 150 / XLM_USD_RATE,
     description: 'Staked $150 on "Will total goals be over 2.5?" – YES',
     timestamp: addDays(-2, 14),
     ledger: 50_134_012,
@@ -768,7 +1029,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "d6a7e8f9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7",
     type: "claim",
     amount: 437,
-    amountXLM: 437 / XLM_RATE,
+    amountXLM: 437 / XLM_USD_RATE,
     description: 'Claimed winnings from "Will Brighton win?" pool',
     timestamp: addDays(-1, 18),
     ledger: 50_145_678,
@@ -779,7 +1040,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "e7b8f9a0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
     type: "vote_reward",
     amount: 15,
-    amountXLM: 15 / XLM_RATE,
+    amountXLM: 15 / XLM_USD_RATE,
     description: 'Vote reward for resolving "Will Everton win?" poll',
     timestamp: addDays(-1, 19),
     ledger: 50_145_901,
@@ -790,7 +1051,7 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
     hash: "f8c9a0b1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
     type: "vote_reward",
     amount: 8,
-    amountXLM: 8 / XLM_RATE,
+    amountXLM: 8 / XLM_USD_RATE,
     description: "Vote reward for resolving VAR review poll",
     timestamp: addDays(0, 9),
     ledger: 50_156_234,

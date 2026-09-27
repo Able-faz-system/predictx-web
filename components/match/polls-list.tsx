@@ -21,7 +21,9 @@ import {
 } from "lucide-react"
 import { PollCard } from "@/components/poll-card"
 import { GamingTabs, GlowCard, GamingButton } from "@/components/shared"
+import { CardErrorBoundary } from "@/components/shared/card-error-boundary"
 import type { Poll, Match, PollCategory } from "@/lib/mock-data"
+import { getLockTimestamp } from "@/lib/calculations"
 
 /* ── Sort types ──────────────────────────────────────────────────────────── */
 
@@ -55,18 +57,6 @@ const CATEGORY_META: Record<CategoryKey, { label: string; icon: typeof LayoutGri
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
-
-function getLockTimestamp(kickoff: string, lockTime: Poll["lockTime"]): number {
-  const k = new Date(kickoff).getTime()
-  switch (lockTime) {
-    case "kickoff":
-      return k
-    case "halftime":
-      return k + 52 * 60 * 1000
-    case "60min":
-      return k + 65 * 60 * 1000
-  }
-}
 
 /* ── Status indicator component ────────────────────────────────────────── */
 
@@ -301,11 +291,13 @@ export function PollsList({ polls, match }: PollsListProps) {
                   <PollStatusBadge status={poll.status} outcome={poll.outcome} />
                 </div>
 
-                <PollCard
-                  poll={poll}
-                  matchId={match.id}
-                  matchName={matchName}
-                />
+                <CardErrorBoundary componentName={`PollCard(${poll.id})`}>
+                  <PollCard
+                    poll={poll}
+                    matchId={match.id}
+                    matchName={matchName}
+                  />
+                </CardErrorBoundary>
               </motion.div>
             ))}
           </motion.div>

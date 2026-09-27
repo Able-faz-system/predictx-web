@@ -30,7 +30,7 @@ const sizeClasses = {
     glow: "0 0 15px",
   },
   lg: {
-    container: "w-20 h-22",
+    container: "w-20 h-[5.5rem]",
     text: "text-base",
     glow: "0 0 20px",
   },

@@ -19,6 +19,15 @@ export default function VotingCenterPage() {
   const maxPotentialRewards = polls.reduce((sum, p) => sum + getVoteReward(p.id), 0);
   const accuracy = getAccuracy();
 
+  const handleConnect = async () => {
+    try {
+      await connect();
+    } catch {
+      // connect() already surfaces errors via toast; swallow here to avoid
+      // double-reporting or an unhandled rejection at the call site.
+    }
+  };
+
   if (!isConnected) {
     return (
       <main className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
@@ -36,7 +45,7 @@ export default function VotingCenterPage() {
           <p className="text-muted-foreground">
             Connect your wallet to access the Resolution Arena, vote on match outcomes, and earn rewards for your accurate judgments.
           </p>
-          <GamingButton variant="primary" onClick={connect} className="w-full h-14 text-lg">
+          <GamingButton variant="primary" onClick={handleConnect} className="w-full h-14 text-lg">
             Connect Wallet
           </GamingButton>
         </motion.div>
@@ -54,7 +63,7 @@ export default function VotingCenterPage() {
         <div className="mx-auto max-w-5xl px-4 lg:px-8 relative z-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-1 h-10 bg-[var(--accent-cyan)] shadow-[0_0_15px_rgba(0,217,255,0.8)]" />
-            <h1 className="font-display text-4xl font-black uppercase text-[var(--accent-cyan)] text-glow-cyan">
+            <h1 className="font-display text-2xl sm:text-4xl font-black uppercase text-[var(--accent-cyan)] text-glow-cyan">
               Resolution Arena
             </h1>
           </div>

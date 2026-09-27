@@ -1,9 +1,88 @@
 "use client"
 
-import { TrendingUp, TrendingDown, Calendar, CheckCircle2, XCircle } from "lucide-react"
-import { useStaking } from "@/hooks/use-staking"
-import { useMockData } from "@/hooks/use-mock-data"
-import { isPollResolved, isPollCancelled, getWinningSide } from "@/lib/calculations"
+import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
+import { EmptyState } from "./shared/empty-state"
+
+const completedPredictions = [
+  {
+    id: 1,
+    match: "Newcastle vs Aston Villa",
+    question: "Will Gordon score a goal?",
+    yourSide: "yes",
+    yourStake: 250,
+    result: "yes",
+    payout: 412,
+    profit: 162,
+    roi: 64.8,
+    date: "Dec 15, 2025",
+    won: true,
+  },
+  {
+    id: 2,
+    match: "Liverpool vs Chelsea",
+    question: "Will Chelsea keep a clean sheet?",
+    yourSide: "yes",
+    yourStake: 180,
+    result: "no",
+    payout: 0,
+    profit: -180,
+    roi: -100,
+    date: "Dec 14, 2025",
+    won: false,
+  },
+  {
+    id: 3,
+    match: "Man United vs Arsenal",
+    question: "Will there be 4+ goals?",
+    yourSide: "no",
+    yourStake: 200,
+    result: "no",
+    payout: 356,
+    profit: 156,
+    roi: 78,
+    date: "Dec 13, 2025",
+    won: true,
+  },
+  {
+    id: 4,
+    match: "Tottenham vs Brighton",
+    question: "Will Son be subbed out?",
+    yourSide: "yes",
+    yourStake: 120,
+    result: "no",
+    payout: 0,
+    profit: -120,
+    roi: -100,
+    date: "Dec 12, 2025",
+    won: false,
+  },
+  {
+    id: 5,
+    match: "West Ham vs Wolves",
+    question: "Will Bowen score or assist?",
+    yourSide: "yes",
+    yourStake: 150,
+    result: "yes",
+    payout: 289,
+    profit: 139,
+    roi: 92.7,
+    date: "Dec 11, 2025",
+    won: true,
+  },
+  {
+    id: 6,
+    match: "Crystal Palace vs Brentford",
+    question: "Will Palace win?",
+    yourSide: "no",
+    yourStake: 95,
+    result: "yes",
+    payout: 0,
+    profit: -95,
+    roi: -100,
+    date: "Dec 10, 2025",
+    won: false,
+  },
+]
 
 export function CompletedPredictions() {
   const { stakes } = useStaking()
@@ -147,6 +226,16 @@ export function CompletedPredictions() {
   const winRate = resolvedRows.length > 0
     ? (resolvedRows.filter((p) => p.won).length / resolvedRows.length) * 100
     : 0
+
+  if (completedPredictions.length === 0) {
+    return (
+      <EmptyState
+        icon={<TrendingUp className="w-10 h-10" />}
+        title="No Completed Predictions"
+        description="Your resolved stakes will appear here once a poll is settled."
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
