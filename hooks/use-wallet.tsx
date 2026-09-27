@@ -55,6 +55,16 @@ async function fetchBalance(publicKey: string, network: StellarNetwork): Promise
   return stellar.getAccountBalance(publicKey, network);
 }
 
+/**
+ * Module-level latch for {@link useWallet.sendTransaction}.
+ *
+ * Deliberately outside the store: the guard has to be readable synchronously
+ * from inside the transaction body, and it must survive the store being
+ * replaced by a `persist` rehydrate mid-flight. One transaction at a time per
+ * wallet is the invariant.
+ */
+let transactionInFlight = false;
+
 export const useWallet = create<WalletState>()(
   persist(
     (set, get) => ({
@@ -156,20 +166,44 @@ export const useWallet = create<WalletState>()(
           throw new Error("Wallet not connected");
         }
 
-        // Round to stroop precision (7 decimal places = 10^-7 XLM) to avoid
-        // floating-point drift from repeated USD → XLM conversions.
-        const STROOPS_PER_XLM = 10_000_000;
-        const amountXLM = Math.round((amountUSD / XLM_USD_RATE) * STROOPS_PER_XLM) / STROOPS_PER_XLM;
-        const feeXLM = STELLAR_BASE_FEE / STROOPS_PER_XLM; // 0.0000100 XLM
-
-        if (amountXLM + feeXLM > state.balance) {
-          throw new Error("Insufficient balance");
+        /**
+         * Re-entrancy latch.
+         *
+         * The simulated latency below is 1-2s, and the balance debit happens
+         * *after* it. Without this latch, two overlapping calls both read the
+         * same pre-await balance, both pass the sufficiency check, and both
+         * then debit — driving the balance negative. The latch rejects the
+         * second call outright rather than trying to reconcile it, because a
+         * second concurrent transaction from one wallet is never legitimate
+         * here: every call site debits as part of placing a single stake.
+         *
+         * A module-level ref rather than store state, so the check is
+         * synchronous and cannot be defeated by two calls in the same tick.
+         */
+        if (transactionInFlight) {
+          throw new Error(
+            "A transaction is already in progress. Please wait for it to finish.",
+          );
         }
+        transactionInFlight = true;
 
-        // simulate network latency (1-2 s)
-        await new Promise((r) =>
-          setTimeout(r, 1000 + Math.random() * 1000),
-        );
+        try {
+          // Round to stroop precision (7 decimal places = 10^-7 XLM) to avoid
+          // floating-point drift from repeated USD → XLM conversions.
+          const STROOPS_PER_XLM = 10_000_000;
+          const amountXLM =
+            Math.round((amountUSD / XLM_USD_RATE) * STROOPS_PER_XLM) /
+            STROOPS_PER_XLM;
+          const feeXLM = STELLAR_BASE_FEE / STROOPS_PER_XLM; // 0.0000100 XLM
+
+          if (amountXLM + feeXLM > state.balance) {
+            throw new Error("Insufficient balance");
+          }
+
+          // simulate network latency (1-2 s)
+          await new Promise((r) =>
+            setTimeout(r, 1000 + Math.random() * 1000),
+          );
 
         // 5 % failure rate
         if (Math.random() < 0.05) {
@@ -182,12 +216,12 @@ export const useWallet = create<WalletState>()(
           );
         }
 
-        // build mock receipt
-        const hashBytes = Array.from({ length: 32 }, () =>
-          Math.floor(Math.random() * 256)
-            .toString(16)
-            .padStart(2, "0"),
-        ).join("");
+          // build mock receipt
+          const hashBytes = Array.from({ length: 32 }, () =>
+            Math.floor(Math.random() * 256)
+              .toString(16)
+              .padStart(2, "0"),
+          ).join("");
 
         const receipt: TransactionReceipt = {
           hash: hashBytes,
@@ -200,11 +234,28 @@ export const useWallet = create<WalletState>()(
           timestamp: new Date().toISOString(),
         };
 
+        /**
+         * Re-check affordability against the live balance rather than the
+         * snapshot taken before the await. With the latch above this is
+         * belt-and-braces, but the debit is the authoritative moment: if
+         * anything else moved the balance while this call was in flight, the
+         * check that matters is the one here.
+         */
+        const liveBalance = useWallet.getState().balance;
+        if (amountXLM + feeXLM > liveBalance) {
+          throw new Error("Insufficient balance");
+        }
+
         // Deduct both the transfer amount and the network fee so the ledger
         // balance exactly matches the receipt — fixes the drift described in #130.
         set((s) => ({ balance: s.balance - amountXLM - feeXLM }));
 
         return receipt;
+
+          return receipt;
+        } finally {
+          transactionInFlight = false;
+        }
       },
     }),
     {
