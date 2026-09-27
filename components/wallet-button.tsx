@@ -17,6 +17,7 @@ import { WalletConnectModal } from "./wallet-connect-modal";
 import { useWallet } from "@/hooks/use-wallet";
 import type { StellarNetwork } from "@/hooks/use-wallet";
 import { shortenAddress } from "@/lib/utils";
+import { formatXLM } from "@/lib/calculations";
 import { resetAllData } from "@/lib/mock-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -66,7 +67,7 @@ export function WalletButton() {
             </div>
 
             <span className="text-xs text-primary">
-              {balance.toLocaleString()} XLM
+              {formatXLM(balance)}
             </span>
           </div>
 
