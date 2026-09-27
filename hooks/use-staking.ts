@@ -12,10 +12,18 @@ import { useWallet, type TransactionReceipt } from "@/hooks/use-wallet";
 import { trackEvent } from "@/lib/analytics";
 
 interface StakingState {
+	/**
+	 * All stakes ever recorded (across all wallets + seed data).
+	 * Consumers should call the wallet-scoped selectors below instead of
+	 * reading this array directly.
+	 */
 	stakes: Stake[];
+
+	/** Stakes belonging to the currently connected wallet. */
 	activeStakes: () => Stake[];
 	pendingStakes: () => Stake[];
 	completedStakes: () => Stake[];
+
 	placeStake: (
 		pollId: string,
 		matchId: string,
@@ -30,18 +38,35 @@ interface StakingState {
 		yesPool: number,
 		noPool: number,
 	) => WinningsCalculation;
+
+	/** Remove all stakes that belong to the given wallet address.
+	 *  Called on disconnect so the next wallet starts with a clean slate. */
+	clearWalletStakes: (address: string) => void;
+}
+
+/** Return only stakes that belong to the connected wallet. */
+function walletStakes(stakes: Stake[]): Stake[] {
+	const address = useWallet.getState().address;
+	if (!address) return [];
+	return stakes.filter((s) => s.wallet === address);
 }
 
 export const useStaking = create<StakingState>()(
 	persist(
 		(set, get) => ({
+			// Seed data is included so the demo wallet (SEED_WALLET) shows history
+			// on first load.  Other wallets will see an empty list because their
+			// address won't match any seed record.
 			stakes: MOCK_STAKES,
 
-			activeStakes: () => get().stakes.filter((s) => s.status === "active"),
+			activeStakes: () =>
+				walletStakes(get().stakes).filter((s) => s.status === "active"),
 			pendingStakes: () =>
-				get().stakes.filter((s) => s.status === "pending_resolution"),
+				walletStakes(get().stakes).filter(
+					(s) => s.status === "pending_resolution",
+				),
 			completedStakes: () =>
-				get().stakes.filter((s) => s.status === "completed"),
+				walletStakes(get().stakes).filter((s) => s.status === "completed"),
 
 			placeStake: async (
 				pollId,
@@ -51,13 +76,13 @@ export const useStaking = create<StakingState>()(
 				side,
 				amount,
 			) => {
+				const walletState = useWallet.getState();
+
 				// Calls the wallet's simulated Stellar transaction
-				const receipt = await useWallet
-					.getState()
-					.sendTransaction(
-						amount,
-						`Staked $${amount} on "${question}" – ${side.toUpperCase()}`,
-					);
+				const receipt = await walletState.sendTransaction(
+					amount,
+					`Staked $${amount} on "${question}" – ${side.toUpperCase()}`,
+				);
 
 				// Update the poll pool in mock data store, passing the wallet
 				// address so participants counts distinct wallets only
@@ -73,6 +98,8 @@ export const useStaking = create<StakingState>()(
 					side,
 					amount,
 					status: "active",
+					// Scope the stake to the wallet that placed it
+					wallet: walletState.address,
 				};
 
 				set((s) => ({ stakes: [...s.stakes, stake] }));
@@ -92,6 +119,11 @@ export const useStaking = create<StakingState>()(
 
 			calculateWinnings: (amount, side, yesPool, noPool) =>
 				calculatePotentialWinnings(amount, side, yesPool, noPool),
+
+			clearWalletStakes: (address: string) =>
+				set((s) => ({
+					stakes: s.stakes.filter((stake) => stake.wallet !== address),
+				})),
 		}),
 		{ name: STORAGE_KEYS.stakes },
 	),

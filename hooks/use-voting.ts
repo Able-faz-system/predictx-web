@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { toast } from "sonner";
 import { persist } from "zustand/middleware";
 import { STORAGE_KEYS, type Poll } from "@/lib/mock-data";
 import { useMockData } from "@/hooks/use-mock-data";
@@ -39,10 +40,14 @@ export interface VoteTally {
 }
 
 interface VotingState {
-  /** pollId → the decision the user cast */
-  userVotes: Record<string, VoteDecision>;
-  /** Rewards waiting for poll resolution before payout */
-  pendingRewards: Record<string, PendingReward>;
+  /**
+   * Votes are stored as a nested map: `{ [walletAddress]: { [pollId]: decision } }`.
+   * Scoping them per wallet means switching accounts never leaks one user's
+   * vote history - or their unpaid rewards - to another.
+   */
+  allVotes: Record<string, Record<string, VoteDecision>>;
+  /** Rewards waiting for poll resolution, scoped per wallet then per poll. */
+  pendingRewards: Record<string, Record<string, PendingReward>>;
   /** Total USD credited to the wallet after settlement — readable by UI */
   userEarnings: number;
   /** Tracks the number of real "unclear" votes cast per poll, keyed by pollId. */
@@ -52,9 +57,12 @@ interface VotingState {
   getVoteReward: (pollId: string) => number;
   getTally: (pollId: string) => VoteTally;
 
+  /** Votes cast by the currently-connected wallet (empty when disconnected). */
+  userVotes: () => Record<string, VoteDecision>;
+
   /**
    * Record the user's vote.
-   * - Stores the decision in userVotes (prevents double-voting).
+   * - Stores the decision against the connected wallet (prevents double-voting).
    * - For non-unclear votes, queues a PendingReward owed-but-unpaid.
    * - "unclear" votes are recorded but earn nothing (farmable reward closed).
    * - Actual wallet credit + ledger entry only happen in settleRewards().
@@ -82,6 +90,12 @@ interface VotingState {
   /** Returns the real count of "unclear" votes cast for a poll (0 if none). */
   getUnclearVotes: (pollId: string) => number;
   initializeMockVotes: () => void;
+
+  /**
+   * Remove all votes and unpaid rewards stored for a wallet address.
+   * Called on disconnect so the next wallet starts from a clean slate.
+   */
+  clearWalletVotes: (address: string) => void;
 }
 
 // Pre-seeded mock community votes for each poll (for initial load)
@@ -100,24 +114,36 @@ const MOCK_COMMUNITY_VOTES: Record<string, VoteDecision[]> = {
 export const useVoting = create<VotingState>()(
   persist(
     (set, get) => ({
-      userVotes: {},
+      allVotes: {},
       pendingRewards: {},
       userEarnings: 0,
       unclearVotesByPoll: {},
       communityVotes: MOCK_COMMUNITY_VOTES,
 
+      userVotes: () => {
+        const address = useWallet.getState().address;
+        if (!address) return {};
+        return get().allVotes[address] ?? {};
+      },
+
       availablePolls: () => {
         const { polls } = useMockData.getState();
         const { stakes } = useStaking.getState();
-        const { userVotes } = get();
+        const address = useWallet.getState().address;
+        const myVotes = address ? get().allVotes[address] ?? {} : {};
 
-        const stakedPollIds = new Set(stakes.map((s) => s.pollId));
+        // Only the connected wallet's stakes block it from voting.
+        const stakedPollIds = new Set(
+          address
+            ? stakes.filter((s) => s.wallet === address).map((s) => s.pollId)
+            : stakes.map((s) => s.pollId),
+        );
 
         return polls.filter(
           (p) =>
             p.status === "voting" &&
             !stakedPollIds.has(p.id) &&
-            !userVotes[p.id],
+            !myVotes[p.id],
         );
       },
 
@@ -135,12 +161,14 @@ export const useVoting = create<VotingState>()(
       },
 
       getTally: (pollId: string) => {
-        const { communityVotes, userVotes } = get();
+        const { communityVotes } = get();
         const allVotes = [...(communityVotes[pollId] || [])];
-        
-        // Add user's vote if they voted on this poll
-        if (userVotes[pollId]) {
-          allVotes.push(userVotes[pollId]);
+        const address = useWallet.getState().address;
+        const myVotes = address ? get().allVotes[address] ?? {} : {};
+
+        // Add the connected wallet's vote if they voted on this poll
+        if (myVotes[pollId]) {
+          allVotes.push(myVotes[pollId]);
         }
 
         const tally = {
@@ -157,12 +185,18 @@ export const useVoting = create<VotingState>()(
         // Simulate network delay for the voting transaction
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        set((state) => {
-          // Already voted — no-op (guard against double-submit races)
-          if (state.userVotes[pollId]) return state;
+        const address = useWallet.getState().address;
+        if (!address) {
+          toast.error("Connect a wallet to vote.");
+          return;
+        }
 
-          const newVotes = { ...state.userVotes, [pollId]: decision };
-          const newPending = { ...state.pendingRewards };
+        set((state) => {
+          const myVotes = state.allVotes[address] ?? {};
+          // Already voted — no-op (guard against double-submit races)
+          if (myVotes[pollId]) return state;
+
+          const newPendingForWallet = { ...(state.pendingRewards[address] ?? {}) };
 
           // "unclear" votes are recorded but earn nothing — reward is 0 and
           // no pending entry is queued, making it impossible to farm.
@@ -171,7 +205,7 @@ export const useVoting = create<VotingState>()(
             if (poll) {
               const reward = get().getVoteReward(pollId);
               const matchData = useMockData.getState().getMatch(poll.matchId);
-              newPending[pollId] = {
+              newPendingForWallet[pollId] = {
                 pollId,
                 matchName: matchData
                   ? `${matchData.homeTeam} vs ${matchData.awayTeam}`
@@ -184,8 +218,14 @@ export const useVoting = create<VotingState>()(
           }
 
           return {
-            userVotes: newVotes,
-            pendingRewards: newPending,
+            allVotes: {
+              ...state.allVotes,
+              [address]: { ...myVotes, [pollId]: decision },
+            },
+            pendingRewards: {
+              ...state.pendingRewards,
+              [address]: newPendingForWallet,
+            },
             // Increment the real unclear counter only when the user votes "unclear"
             unclearVotesByPoll:
               decision === "unclear"
@@ -208,7 +248,9 @@ export const useVoting = create<VotingState>()(
       },
 
       settleRewards: () => {
-        const { pendingRewards } = get();
+        const address = useWallet.getState().address;
+        if (!address) return;
+        const pendingRewards = get().pendingRewards[address] ?? {};
         if (Object.keys(pendingRewards).length === 0) return;
 
         const polls = useMockData.getState().polls;
@@ -230,6 +272,7 @@ export const useVoting = create<VotingState>()(
 
           // Only settle polls that are fully resolved with a definitive outcome
           if (poll.status !== "resolved" || !poll.outcome) continue;
+
 
           // Remove from pending regardless of outcome (no payout if wrong/unclear)
           delete remainingPending[pollId];
@@ -257,7 +300,7 @@ export const useVoting = create<VotingState>()(
         }
 
         set((s) => ({
-          pendingRewards: remainingPending,
+          pendingRewards: { ...s.pendingRewards, [address]: remainingPending },
           userEarnings: s.userEarnings + earned,
         }));
       },
@@ -267,9 +310,13 @@ export const useVoting = create<VotingState>()(
       },
 
       getAccuracy: () => {
-        const votesCast = Object.keys(get().userVotes).length;
+        const address = useWallet.getState().address;
+        const votesCast = address
+          ? Object.keys(get().allVotes[address] ?? {}).length
+          : 0;
         if (votesCast === 0) return 0;
-        // Mock accuracy — real accuracy would compare userVotes to resolved poll outcomes
+        // Mock accuracy — real accuracy would compare the wallet's votes to
+        // resolved poll outcomes.
         return 89;
       },
 
@@ -279,6 +326,15 @@ export const useVoting = create<VotingState>()(
           communityVotes: { ...MOCK_COMMUNITY_VOTES, ...state.communityVotes },
         }));
       },
+
+      clearWalletVotes: (address: string) =>
+        set((state) => {
+          const allVotes = { ...state.allVotes };
+          delete allVotes[address];
+          const pendingRewards = { ...state.pendingRewards };
+          delete pendingRewards[address];
+          return { allVotes, pendingRewards };
+        }),
     }),
     { name: STORAGE_KEYS.votes },
   ),
