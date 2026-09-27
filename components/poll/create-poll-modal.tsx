@@ -376,8 +376,6 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
     // ── Render ────────────────────────────────────────────────────────────────
 
     const charCount = form.question.length;
-    const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= QUESTION_MIN ? "text-primary" : "text-muted-foreground";
-    const lockDisplay = resolvedMatch ? getLockDisplay(form.lockTime, form.customLockTime, resolvedMatch.kickoff) : "—";
     const charColor = charCount > 100 ? "text-[#ff006e]" : charCount >= POLL_QUESTION_MIN_LENGTH ? "text-primary" : "text-muted-foreground";
     const lockDisplay = selectedMatch ? getLockDisplay(form.lockTime, form.customLockTime, selectedMatch.kickoff) : "—";
     const showLivePreview = step >= 3;
