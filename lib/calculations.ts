@@ -1,3 +1,5 @@
+import { XLM_USD_RATE } from "@/lib/constants";
+
 export interface WinningsCalculation {
 	grossWinnings: number;
 	platformFee: number;
@@ -39,23 +41,54 @@ export function calculatePoolPercentages(yesPool: number, noPool: number) {
 	};
 }
 
-export function formatCurrency(amount: number): string {
-	return new Intl.NumberFormat("en-US", {
+export function formatCurrency(
+	amount: number,
+	locale: string = "en-US",
+	currency: string = "USD",
+): string {
+	return new Intl.NumberFormat(locale, {
 		style: "currency",
-		currency: "USD",
+		currency,
 	}).format(amount);
 }
 
-export function formatCompactCurrency(amount: number): string {
-	if (amount >= 1e6) return `$${(amount / 1e6).toFixed(1)}M`;
-	if (amount >= 1e3) return `$${(amount / 1e3).toFixed(1)}K`;
-	return formatCurrency(amount);
+export function formatCompactCurrency(
+	amount: number,
+	locale: string = "en-US",
+	currency: string = "USD",
+): string {
+	if (amount >= 1e6) {
+		return new Intl.NumberFormat(locale, {
+			style: "currency",
+			currency,
+			notation: "compact",
+			maximumFractionDigits: 1,
+		}).format(amount);
+	}
+	if (amount >= 1e3) {
+		return new Intl.NumberFormat(locale, {
+			style: "currency",
+			currency,
+			notation: "compact",
+			maximumFractionDigits: 1,
+		}).format(amount);
+	}
+	return formatCurrency(amount, locale, currency);
 }
 
 export function formatAddress(addr: string): string {
 	return addr.length < 8 ? addr : `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
-export function formatXLM(amount: number): string {
-	return `${new Intl.NumberFormat("en-US").format(Math.round(amount))} XLM`;
+export function formatXLM(amount: number, locale: string = "en-US"): string {
+	return `${new Intl.NumberFormat(locale).format(Math.round(amount))} XLM`;
 }
+
+export function convertXlmToUsd(xlm: number): number {
+	return xlm * XLM_USD_RATE;
+}
+
+export function convertUsdToXlm(usd: number): number {
+	return usd / XLM_USD_RATE;
+}
+

@@ -80,7 +80,13 @@ export default function MatchPage() {
               Choose a poll and stake on the outcome you believe will happen
             </p>
           </div>
-          <CreatePollButton matchId={params.id} />
+          {/* Only show the create-poll CTA for upcoming matches — creating a
+              market for a live or completed game makes no sense and the modal's
+              own match dropdown (upcoming-only) would leave the pre-filled ID
+              unresolvable. */}
+          {match.status === "upcoming" && (
+            <CreatePollButton matchId={params.id} />
+          )}
         </div>
         <PollsList matchId={params.id} />
       </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
+import { EmptyState } from "./shared/empty-state"
 
 const completedPredictions = [
   {
@@ -87,6 +88,16 @@ export function CompletedPredictions() {
   const totalProfit = completedPredictions.reduce((sum, pred) => sum + pred.profit, 0)
   const totalStaked = completedPredictions.reduce((sum, pred) => sum + pred.yourStake, 0)
   const winRate = (completedPredictions.filter((p) => p.won).length / completedPredictions.length) * 100
+
+  if (completedPredictions.length === 0) {
+    return (
+      <EmptyState
+        icon={<TrendingUp className="w-10 h-10" />}
+        title="No Completed Predictions"
+        description="Your resolved stakes will appear here once a poll is settled."
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">

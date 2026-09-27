@@ -1,6 +1,7 @@
 "use client"
 
 import { Clock, Users, AlertCircle } from "lucide-react"
+import { EmptyState } from "./shared/empty-state"
 
 const pendingPolls = [
   {
@@ -28,11 +29,11 @@ const pendingPolls = [
 export function PendingResolution() {
   if (pendingPolls.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="text-6xl mb-4 opacity-20">⏳</div>
-        <h3 className="font-display text-xl font-black uppercase text-muted mb-2">No Pending Resolutions</h3>
-        <p className="text-muted-foreground">Your completed matches will appear here</p>
-      </div>
+      <EmptyState
+        icon={<Clock className="w-10 h-10" />}
+        title="No Pending Resolutions"
+        description="Your completed matches will appear here once they're awaiting resolution."
+      />
     )
   }
 

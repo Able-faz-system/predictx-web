@@ -149,3 +149,13 @@ export const POLL_QUESTION_MAX_LENGTH = 120; // characters
  * Prevents trivially short or ambiguous questions from being created.
  */
 export const POLL_QUESTION_MIN_LENGTH = 10; // characters
+
+/**
+ * XLM amount charged to the creator when a new poll is submitted on-chain.
+ * Used by both the UI copy and the sendTransaction call so the advertised fee
+ * always matches the amount actually debited from the creator's wallet.
+ * Soroban: mirrors `poll_creation_fee_stroops` (10000 stroops = 0.001 XLM)
+ * in the contract.
+ * @example sendTransaction(CREATE_POLL_FEE_XLM, `Create poll: ${question}`)
+ */
+export const CREATE_POLL_FEE_XLM = 0.001; // XLM
