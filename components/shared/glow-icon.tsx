@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export function GlowIcon({
     }
   };
 
-  const getTransition = () => {
+  const getTransition = (): Transition => {
     switch (animationType) {
       case "pulse":
         return { duration: 2, repeat: Infinity, ease: "easeInOut" };

@@ -6,7 +6,7 @@ import { GamingButton } from "@/components/shared/gaming-button";
 export default function NotFound() {
   return (
     <main className="min-h-[80vh] flex items-center justify-center px-4">
-      <GlowCard variant="neutral" className="max-w-md w-full text-center">
+      <GlowCard variant="default" className="max-w-md w-full text-center">
         <div className="relative z-20 p-8 space-y-4">
           {/* 404 display */}
           <div className="font-display text-7xl font-black text-primary/30 text-glow-cyan select-none">
@@ -32,7 +32,7 @@ export default function NotFound() {
               </GamingButton>
             </Link>
             <Link href="/dashboard">
-              <GamingButton variant="secondary" size="md">
+              <GamingButton variant="ghost" size="md">
                 My Dashboard
               </GamingButton>
             </Link>

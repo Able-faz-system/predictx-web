@@ -54,7 +54,7 @@ export function ErrorFallback({ error, reset, context }: ErrorFallbackProps) {
             </GamingButton>
 
             <Link href="/">
-              <GamingButton variant="secondary" size="md">
+              <GamingButton variant="ghost" size="md">
                 <Home className="mr-2 h-4 w-4" />
                 Go Home
               </GamingButton>
