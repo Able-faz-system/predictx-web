@@ -305,6 +305,8 @@ export function CreatePollModal({ open, onClose, preselectedMatchId }: CreatePol
                 yesPool: 0,
                 noPool: 0,
                 participants: 0,
+                stakeCount: 0,
+                stakers: [],
                 status: "active",
                 lockTime: (form.lockTime === "custom" ? "kickoff" : form.lockTime) as LockTime,
                 recentActivity: "Just created",

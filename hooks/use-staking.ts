@@ -59,8 +59,10 @@ export const useStaking = create<StakingState>()(
 						`Staked $${amount} on "${question}" – ${side.toUpperCase()}`,
 					);
 
-				// Update the poll pool in mock data store
-				useMockData.getState().updatePollPool(pollId, side, amount);
+				// Update the poll pool in mock data store, passing the wallet
+				// address so participants counts distinct wallets only
+				const walletAddress = useWallet.getState().address ?? undefined;
+				useMockData.getState().updatePollPool(pollId, side, amount, walletAddress);
 
 				const stake: Stake = {
 					id: `stake-${receipt.hash.slice(0, 8)}`,
